@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Case 02 – Controle do Elevador</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#0a0c10; --panel:#0f1318; --steel:#1e2330; --steel-light:#2a3040;
+      --border:#2e3548; --neon:#00e5ff; --neon-dim:rgba(0,229,255,0.15);
+      --neon-glow:0 0 8px #00e5ff,0 0 20px rgba(0,229,255,0.4);
+      --gold:#ffd166; --danger:#ff4757; --text:#c8d8f0; --text-dim:#5a6a80;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;overflow:hidden;}
+    body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--text);display:flex;flex-direction:column;height:100vh;}
+
+    /* HEADER */
+    .header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;z-index:20;}
+    .back-btn{display:flex;align-items:center;gap:6px;color:var(--neon);font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-decoration:none;text-transform:uppercase;padding:6px 12px;border:1px solid var(--neon);border-radius:4px;transition:all .2s;background:rgba(0,229,255,0.05);}
+    .back-btn:hover{background:rgba(0,229,255,0.15);box-shadow:var(--neon-glow);}
+    .header-title{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;letter-spacing:3px;color:var(--text);text-transform:uppercase;}
+    .header-title span{color:var(--neon);}
+    .header-badge{font-size:11px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;text-align:right;}
+
+    /* LAYOUT */
+    .app{display:grid;grid-template-columns:230px 1fr 190px;grid-template-rows:1fr auto;flex:1;min-height:0;}
+
+    /* ── BUILDING TRAJECTORY ─────────────────────────────── */
+    .building-traj{
+      position:absolute;
+      right:12px; top:50%;
+      transform:translateY(-50%);
+      width:64px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:0;
+      z-index:30;
+      pointer-events:none;
+    }
+    .traj-label{
+      font-family:'Orbitron',sans-serif;
+      font-size:8px; letter-spacing:1.5px; color:var(--text-dim);
+      text-transform:uppercase;
+      writing-mode:vertical-rl;
+      text-orientation:mixed;
+      transform:rotate(180deg);
+      position:absolute;
+      left:-20px; top:50%;
+      transform:translateY(-50%) rotate(180deg);
+    }
+    .building-shaft{
+      position:relative;
+      width:40px;
+      height:220px;
+      background:#080a0e;
+      border:1px solid var(--border);
+      border-radius:4px;
+      overflow:visible;
+    }
+    /* floor slots */
+    .bfloor{
+      position:absolute;
+      left:0; right:0;
+      height:55px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+    }
+    .bfloor:last-child{ border-bottom:none; }
+    .bfloor-label{
+      font-family:'Orbitron',sans-serif;
+      font-size:8px; font-weight:700;
+      color:var(--text-dim);
+      position:absolute;
+      left:-22px;
+      width:18px;
+      text-align:right;
+    }
+    .bfloor-line{
+      position:absolute;
+      right:0;
+      width:8px;
+      height:1px;
+      background:var(--border);
+    }
+    /* floor indicator dots (right of shaft) */
+    .bfloor-dot{
+      position:absolute;
+      right:-14px;
+      width:8px; height:8px;
+      border-radius:50%;
+      background:var(--border);
+      transition:all .4s;
+    }
+    .bfloor-dot.active{
+      background:var(--neon);
+      box-shadow:0 0 8px var(--neon);
+    }
+    /* doors on each floor slot */
+    .bfloor-door-l,.bfloor-door-r{
+      position:absolute;
+      top:8px; bottom:8px;
+      width:calc(50% - 2px);
+      background:linear-gradient(to right,#4a5260,#70808e);
+      transition:transform .9s cubic-bezier(.4,0,.2,1);
+      border-radius:1px;
+    }
+    .bfloor-door-l{left:2px;}
+    .bfloor-door-r{right:2px;background:linear-gradient(to left,#4a5260,#70808e);}
+    .bfloor.doors-open .bfloor-door-l{transform:translateX(-100%);}
+    .bfloor.doors-open .bfloor-door-r{transform:translateX(100%);}
+
+    /* elevator cabin in trajectory */
+    .traj-cabin{
+      position:absolute;
+      left:3px; right:3px;
+      height:48px;
+      background:linear-gradient(135deg,#0a1e28,#162840);
+      border:1.5px solid var(--neon);
+      border-radius:3px;
+      box-shadow:0 0 10px rgba(0,229,255,0.35), 0 0 3px rgba(0,229,255,0.2);
+      transition:bottom 1.0s cubic-bezier(0.4,0,0.2,1);
+      z-index:5;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .traj-cabin::before{
+      content:'';
+      position:absolute;
+      inset:3px;
+      border:1px solid rgba(0,229,255,0.15);
+      border-radius:2px;
+    }
+    .traj-cabin-label{
+      font-family:'Orbitron',sans-serif;
+      font-size:9px; font-weight:900;
+      color:var(--neon);
+      text-shadow:0 0 6px var(--neon);
+    }
+    /* Cable above cabin */
+    .traj-cable{
+      position:absolute;
+      left:50%; width:2px;
+      background:repeating-linear-gradient(0deg,#2a3040,#2a3040 3px,#1a2030 3px,#1a2030 5px);
+      transform:translateX(-50%);
+      transition:height 1.0s cubic-bezier(0.4,0,0.2,1),bottom 1.0s cubic-bezier(0.4,0,0.2,1);
+      z-index:4;
+    }
+    /* Movement indicator dots on shaft sides */
+    .traj-motion-dots{
+      position:absolute;
+      left:50%; width:4px;
+      transform:translateX(-50%);
+      pointer-events:none;
+      opacity:0;
+      transition:opacity .3s;
+    }
+    .traj-motion-dots.visible{opacity:1;}
+    .traj-dot{
+      width:3px; height:3px;
+      background:rgba(0,229,255,0.6);
+      border-radius:50%;
+      margin: 4px auto;
+    }
+    .moving-up   .traj-dot{animation:dotUp   0.5s linear infinite;}
+    .moving-down .traj-dot{animation:dotDown 0.5s linear infinite;}
+    @keyframes dotUp  {from{transform:translateY(0);opacity:1}to{transform:translateY(-20px);opacity:0}}
+    @keyframes dotDown{from{transform:translateY(0);opacity:1}to{transform:translateY(20px);opacity:0}}
+
+    .panel{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+    .panel.right{border-right:none;border-left:1px solid var(--border);}
+    .panel-section{padding:14px 16px;border-bottom:1px solid var(--border);}
+    .panel-section:last-child{border-bottom:none;flex:1;}
+    .section-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;font-weight:700;}
+
+    /* STATE BOX */
+    .state-box{background:var(--steel);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;}
+    .state-id{font-family:'Orbitron',sans-serif;font-size:28px;font-weight:900;color:var(--neon);text-shadow:var(--neon-glow);line-height:1;margin-bottom:4px;}
+    .state-name{font-size:13px;color:var(--text-dim);letter-spacing:1px;}
+    .state-badge{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:10px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;}
+    .state-badge.open{background:rgba(0,229,255,0.1);border:1px solid var(--neon);color:var(--neon);}
+    .state-badge.closed{background:rgba(255,71,87,0.1);border:1px solid var(--danger);color:var(--danger);}
+    .state-badge.moving{background:rgba(255,209,102,0.1);border:1px solid var(--gold);color:var(--gold);}
+
+    /* LOG */
+    .log-container{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding:10px 16px;max-height:180px;}
+    .log-entry{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);padding:3px 6px;border-left:2px solid var(--border);animation:fadeIn .3s ease;}
+    .log-entry.latest{color:var(--neon);border-left-color:var(--neon);}
+    @keyframes fadeIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
+
+    /* QUEUE */
+    .queue-display{display:flex;flex-wrap:wrap;gap:6px;}
+    .queue-item{background:var(--steel);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-family:'Orbitron',sans-serif;font-size:13px;color:var(--gold);animation:popIn .2s ease;}
+    @keyframes popIn{from{transform:scale(0.8);opacity:0}to{transform:scale(1);opacity:1}}
+    .queue-empty{font-size:12px;color:var(--text-dim);font-style:italic;}
+
+    /* CENTER SCENE */
+    .elevator-center{background:#050709;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+    .scene-wrapper{position:relative;width:540px;height:calc(100% - 20px);max-height:520px;}
+    .elevator-scene{position:absolute;inset:0;background:#111318;overflow:hidden;}
+    .elevator-scene.shaking{animation:shake 0.3s ease-in-out infinite;}
+    @keyframes shake{
+      0%,100%{transform:translateY(0) translateX(0);}
+      15%{transform:translateY(-3px) translateX(1.5px);}
+      30%{transform:translateY(3px) translateX(-1px);}
+      45%{transform:translateY(-2px) translateX(2px);}
+      60%{transform:translateY(2px) translateX(-1.5px);}
+      75%{transform:translateY(-1px) translateX(1px);}
+      90%{transform:translateY(1px) translateX(-0.5px);}
+    }
+
+    /* CEILING */
+    .cabin-ceiling{position:absolute;top:0;left:0;right:0;height:88px;background:linear-gradient(to bottom,#0d1018 0%,#151a22 100%);z-index:5;}
+    .ceiling-lights{position:absolute;bottom:10px;left:15%;right:15%;height:6px;
+      background:linear-gradient(to right,transparent 0%,rgba(255,250,220,0.8) 20%,rgba(255,250,220,1) 50%,rgba(255,250,220,0.8) 80%,transparent 100%);
+      border-radius:3px;box-shadow:0 0 20px rgba(255,250,200,0.6),0 0 50px rgba(255,250,200,0.2);animation:flicker 8s ease-in-out infinite;}
+    .ceiling-glow{position:absolute;bottom:0;left:10%;right:10%;height:60px;background:radial-gradient(ellipse at 50% 100%,rgba(255,245,200,0.12) 0%,transparent 70%);pointer-events:none;}
+    @keyframes flicker{0%,93%,100%{opacity:1}94%{opacity:.7}96%{opacity:1}97%{opacity:.4}99%{opacity:1}}
+
+    /* FLOOR */
+    .cabin-floor{position:absolute;bottom:0;left:0;right:0;height:52px;z-index:5;
+      background:repeating-linear-gradient(90deg,transparent,transparent 29px,rgba(0,0,0,.22) 29px,rgba(0,0,0,.22) 30px),
+        repeating-linear-gradient(0deg,transparent,transparent 29px,rgba(0,0,0,.22) 29px,rgba(0,0,0,.22) 30px),
+        linear-gradient(to top,#1a1e26 0%,#222836 100%);}
+
+    /* WALLS */
+    .wall-left{position:absolute;left:0;top:88px;bottom:52px;width:130px;background:linear-gradient(to right,#0e1118 0%,#1a1f2a 70%,#1e2435 100%);clip-path:polygon(0 0,100% 10%,100% 90%,0 100%);z-index:4;}
+    .wall-right{position:absolute;right:0;top:88px;bottom:52px;width:130px;background:linear-gradient(to left,#0e1118 0%,#1a1f2a 70%,#1e2435 100%);clip-path:polygon(0 10%,100% 0,100% 100%,0 90%);z-index:4;}
+
+    /* DOOR AREA */
+    .door-area{position:absolute;left:130px;right:130px;top:88px;bottom:52px;z-index:3;display:flex;flex-direction:column;}
+    .floor-indicator{height:62px;background:#040608;border:2px solid #1a2030;border-bottom:none;display:flex;align-items:center;justify-content:center;gap:16px;padding:0 16px;flex-shrink:0;}
+    .floor-display-num{font-family:'Orbitron',sans-serif;font-size:40px;font-weight:900;color:var(--neon);text-shadow:var(--neon-glow);line-height:1;transition:all 0.2s;min-width:60px;text-align:center;}
+    .direction-arrow{font-size:20px;color:var(--neon);text-shadow:var(--neon-glow);opacity:0;transition:opacity 0.3s;}
+    .direction-arrow.visible{opacity:1;animation:arrowPulse 0.6s ease-in-out infinite;}
+    @keyframes arrowPulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+    /* DOOR FRAME */
+    .door-frame{flex:1;position:relative;overflow:hidden;border:3px solid #1e2435;border-top:2px solid #2a3248;background:#080a0e;}
+
+    /* LOBBY BG */
+    .lobby-bg{position:absolute;inset:0;overflow:hidden;transition:opacity 0.4s;}
+    .lobby-bg svg{width:100%;height:100%;display:block;}
+
+    /* SHAFT VIEW — shown during movement */
+    .shaft-view{position:absolute;inset:0;z-index:8;opacity:0;pointer-events:none;overflow:hidden;background:#050608;transition:opacity 0.35s;}
+    .elevator-scene.moving .shaft-view{opacity:1;}
+    .shaft-track{position:absolute;left:42%;right:42%;top:-100%;bottom:-100%;background:#1a1e26;}
+    /* concrete walls */
+    .shaft-wall-l{position:absolute;left:0;right:60%;top:-300%;bottom:-300%;
+      background:repeating-linear-gradient(0deg,#080a0d,#080a0d 58px,#0c0e14 58px,#0c0e14 60px);}
+    .shaft-wall-r{position:absolute;left:60%;right:0;top:-300%;bottom:-300%;
+      background:repeating-linear-gradient(0deg,#080a0d,#080a0d 58px,#0c0e14 58px,#0c0e14 60px);}
+    /* cables */
+    .shaft-cable{position:absolute;left:50%;top:-300%;bottom:-300%;width:3px;transform:translateX(-50%);background:repeating-linear-gradient(0deg,#2a3040,#2a3040 4px,#1a2030 4px,#1a2030 6px);}
+    /* floor markers that scroll */
+    .shaft-markers{position:absolute;left:0;right:0;top:0;bottom:0;}
+    .shaft-marker{position:absolute;left:0;right:0;height:2px;background:rgba(0,229,255,0.25);box-shadow:0 0 6px rgba(0,229,255,0.2);}
+    /* speed lines on walls */
+    .shaft-speed{position:absolute;inset:0;background:
+      repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,229,255,0.02) 3px,rgba(0,229,255,0.03) 4px);}
+
+    /* SHAFT ANIMATIONS */
+    .elevator-scene.moving-up   .shaft-wall-l,
+    .elevator-scene.moving-up   .shaft-wall-r  {animation:shaftUp   0.55s linear infinite;}
+    .elevator-scene.moving-down .shaft-wall-l,
+    .elevator-scene.moving-down .shaft-wall-r  {animation:shaftDown 0.55s linear infinite;}
+    .elevator-scene.moving-up   .shaft-cable   {animation:cableUp   0.3s  linear infinite;}
+    .elevator-scene.moving-down .shaft-cable   {animation:cableDown 0.3s  linear infinite;}
+    .elevator-scene.moving-up   .shaft-markers {animation:markersUp   0.8s linear infinite;}
+    .elevator-scene.moving-down .shaft-markers {animation:markersDown 0.8s linear infinite;}
+
+    @keyframes shaftUp   {from{transform:translateY(0)}to{transform:translateY(60px)}}
+    @keyframes shaftDown {from{transform:translateY(0)}to{transform:translateY(-60px)}}
+    @keyframes cableUp   {from{transform:translateX(-50%) translateY(0)}to{transform:translateX(-50%) translateY(6px)}}
+    @keyframes cableDown {from{transform:translateX(-50%) translateY(0)}to{transform:translateX(-50%) translateY(-6px)}}
+    @keyframes markersUp  {from{transform:translateY(0)}to{transform:translateY(140px)}}
+    @keyframes markersDown{from{transform:translateY(0)}to{transform:translateY(-140px)}}
+
+    /* VIGNETTE over shaft during movement */
+    .shaft-vignette{position:absolute;inset:0;pointer-events:none;
+      background:radial-gradient(ellipse at 50% 50%,transparent 35%,rgba(0,0,0,0.65) 100%);z-index:9;}
+
+    /* DOORS */
+    .door-left,.door-right{position:absolute;top:0;bottom:0;width:51%;z-index:10;transition:transform 1.15s cubic-bezier(0.4,0,0.15,1);}
+    .door-left{left:0;background:linear-gradient(to right,#5a6270 0%,#8090a0 25%,#b0bcc8 55%,#98a8b8 78%,#6a7480 100%);transform:translateX(0);}
+    .door-right{right:0;background:linear-gradient(to left,#5a6270 0%,#8090a0 25%,#b0bcc8 55%,#98a8b8 78%,#6a7480 100%);transform:translateX(0);}
+    .door-left::before,.door-right::before,.door-left::after,.door-right::after{content:'';position:absolute;left:14%;right:14%;background:rgba(0,0,0,0.1);border-radius:2px;}
+    .door-left::before,.door-right::before{top:18%;height:30%;border:1px solid rgba(255,255,255,0.09);}
+    .door-left::after,.door-right::after{top:55%;height:30%;border:1px solid rgba(255,255,255,0.09);}
+    .door-seam{position:absolute;top:0;bottom:0;left:50%;width:3px;background:#030405;transform:translateX(-50%);z-index:11;}
+    .door-left .door-edge{position:absolute;right:0;top:0;bottom:0;width:3px;background:#252e3e;}
+    .door-right .door-edge{position:absolute;left:0;top:0;bottom:0;width:3px;background:#252e3e;}
+    .elevator-scene.doors-open .door-left{transform:translateX(-100%);}
+    .elevator-scene.doors-open .door-right{transform:translateX(100%);}
+    .elevator-scene.doors-open .door-seam{opacity:0;}
+
+    /* ARRIVAL FLASH */
+    .arrive-flash{position:absolute;inset:0;z-index:25;pointer-events:none;opacity:0;}
+    .arrive-flash.active{animation:flashIn 0.7s ease-out forwards;}
+    @keyframes flashIn{0%{opacity:1;background:rgba(255,255,255,0.18)}50%{opacity:.6;background:rgba(0,229,255,0.12)}100%{opacity:0}}
+
+    /* LIGHT AMBIENT GLOW on walls when door opens */
+    .elevator-scene.doors-open .wall-left{filter:brightness(1.15);}
+    .elevator-scene.doors-open .wall-right{filter:brightness(1.15);}
+
+    /* FLOOR BUTTONS */
+    .btn-panel{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px;}
+    .floor-btn{width:64px;height:64px;border-radius:50%;border:2px solid #2e3548;background:radial-gradient(circle at 40% 35%,#1a1f2a,#0d1018);color:#6a7a8a;font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .25s;
+      box-shadow:0 2px 6px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06),inset 0 -1px 0 rgba(0,0,0,.3);outline:none;display:flex;align-items:center;justify-content:center;}
+    .floor-btn:hover:not(:disabled){border-color:var(--neon);color:var(--neon);box-shadow:0 0 16px rgba(0,229,255,.3),0 2px 6px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);transform:scale(1.06);}
+    .floor-btn.queued{border-color:var(--gold);color:var(--gold);background:radial-gradient(circle at 40% 35%,#1f1c12,#0d0c08);animation:btnPulse 1.5s ease-in-out infinite;}
+    @keyframes btnPulse{0%,100%{box-shadow:0 0 16px rgba(255,209,102,.4),0 2px 6px rgba(0,0,0,.6)}50%{box-shadow:0 0 28px rgba(255,209,102,.7),0 2px 6px rgba(0,0,0,.6)}}
+    .floor-btn.current{border-color:var(--neon);color:var(--neon);background:radial-gradient(circle at 40% 35%,#0a1f28,#051318);box-shadow:0 0 20px rgba(0,229,255,.5),0 2px 6px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.1);}
+    .floor-btn-label{font-size:10px;color:var(--text-dim);letter-spacing:1px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:500;}
+    .btn-with-label{display:flex;flex-direction:column;align-items:center;gap:4px;}
+    .reset-btn{width:64px;height:32px;border-radius:8px;border:1px solid var(--danger);background:rgba(255,71,87,.08);color:var(--danger);font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;text-transform:uppercase;transition:all .2s;margin-top:8px;}
+    .reset-btn:hover{background:rgba(255,71,87,.2);box-shadow:0 0 12px rgba(255,71,87,.3);}
+    .door-status-light{width:10px;height:10px;border-radius:50%;background:var(--danger);box-shadow:0 0 8px var(--danger);transition:all .3s;margin:0 auto;}
+    .door-status-light.open-light{background:var(--neon);box-shadow:0 0 8px var(--neon);}
+
+    /* LOBBY */
+    .lobby-bg{position:absolute;inset:0;overflow:hidden;}
+    .lobby-bg svg{width:100%;height:100%;display:block;}
+
+    /* AFD PANEL */
+    .afd-panel{grid-column:1 / -1;background:var(--panel);border-top:1px solid var(--border);padding:12px 20px;flex-shrink:0;}
+    .afd-panel-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+    .afd-panel-title{font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);font-weight:700;}
+    .afd-legend{display:flex;gap:16px;margin-left:auto;}
+    .legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-dim);letter-spacing:1px;}
+    .legend-circle{width:12px;height:12px;border-radius:50%;}
+    #afd-svg{width:100%;height:150px;overflow:visible;}
+    .alphabet-display{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;}
+    .sigma-item{font-family:'Share Tech Mono',monospace;font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);transition:all .3s;}
+    .sigma-item.active{border-color:var(--neon);color:var(--neon);background:var(--neon-dim);box-shadow:0 0 6px rgba(0,229,255,.3);}
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  </style>
+</head>
+<body>
+<header class="header">
+  <a class="back-btn" href="../index.html">← Menu</a>
+  <div class="header-title"><span>CASE 02</span> — CONTROLE DO ELEVADOR</div>
+  <div class="header-badge">AFD · Autômato Finito Determinístico</div>
+</header>
+
+<div class="app">
+  <!-- LEFT PANEL -->
+  <div class="panel">
+    <div class="panel-section">
+      <div class="section-label">Estado Atual</div>
+      <div class="state-box">
+        <div class="state-id" id="state-id">q0</div>
+        <div class="state-name" id="state-name">Térreo · Portas Abertas</div>
+        <span class="state-badge open" id="state-badge">Aceitante ✓</span>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="section-label">Último Símbolo (σ)</div>
+      <div class="alphabet-display" id="alphabet-display">
+        <span class="sigma-item" data-sym="fechar">fechar</span>
+        <span class="sigma-item" data-sym="subir">subir</span>
+        <span class="sigma-item" data-sym="descer">descer</span>
+        <span class="sigma-item" data-sym="chegar_0">chegar_T</span>
+        <span class="sigma-item" data-sym="chegar_1">chegar_1</span>
+        <span class="sigma-item" data-sym="chegar_2">chegar_2</span>
+        <span class="sigma-item" data-sym="chegar_3">chegar_3</span>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="section-label">Fila de Chamadas</div>
+      <div class="queue-display" id="queue-display"><span class="queue-empty">Nenhuma chamada</span></div>
+    </div>
+    <div class="panel-section" style="flex:1;min-height:0;">
+      <div class="section-label">Log de Transições δ(q, σ)</div>
+      <div class="log-container" id="log-container"></div>
+    </div>
+  </div>
+
+  <!-- CENTER: First-person elevator -->
+  <div class="elevator-center">
+
+    <!-- BUILDING TRAJECTORY WIDGET -->
+    <div class="building-traj" id="building-traj">
+      <div class="building-shaft" id="building-shaft">
+        <!-- Floor 3 -->
+        <div class="bfloor" id="bfloor-3" style="top:0">
+          <span class="bfloor-label">3</span>
+          <div class="bfloor-door-l"></div>
+          <div class="bfloor-door-r"></div>
+          <div class="bfloor-dot" id="bdot-3"></div>
+          <div class="bfloor-line"></div>
+        </div>
+        <!-- Floor 2 -->
+        <div class="bfloor" id="bfloor-2" style="top:55px">
+          <span class="bfloor-label">2</span>
+          <div class="bfloor-door-l"></div>
+          <div class="bfloor-door-r"></div>
+          <div class="bfloor-dot" id="bdot-2"></div>
+          <div class="bfloor-line"></div>
+        </div>
+        <!-- Floor 1 -->
+        <div class="bfloor" id="bfloor-1" style="top:110px">
+          <span class="bfloor-label">1</span>
+          <div class="bfloor-door-l"></div>
+          <div class="bfloor-door-r"></div>
+          <div class="bfloor-dot" id="bdot-1"></div>
+          <div class="bfloor-line"></div>
+        </div>
+        <!-- Terreo -->
+        <div class="bfloor" id="bfloor-0" style="top:165px">
+          <span class="bfloor-label">T</span>
+          <div class="bfloor-door-l"></div>
+          <div class="bfloor-door-r"></div>
+          <div class="bfloor-dot" id="bdot-0"></div>
+        </div>
+
+        <!-- Elevator cabin -->
+        <div class="traj-cabin" id="traj-cabin" style="bottom:4px">
+          <span class="traj-cabin-label" id="traj-cabin-label">T</span>
+        </div>
+        <!-- Cable -->
+        <div class="traj-cable" id="traj-cable" style="bottom:52px;height:168px"></div>
+        <!-- Motion dots -->
+        <div class="traj-motion-dots" id="traj-motion-dots" style="top:20px">
+          <div class="traj-dot"></div>
+          <div class="traj-dot"></div>
+          <div class="traj-dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene-wrapper">
+      <div class="elevator-scene doors-open" id="elevator-scene">
+        <div class="cabin-ceiling"><div class="ceiling-lights"></div><div class="ceiling-glow"></div></div>
+        <div class="wall-left"></div>
+        <div class="wall-right"></div>
+        <div class="door-area">
+          <div class="floor-indicator">
+            <div class="direction-arrow" id="dir-arrow-up">▲</div>
+            <div class="floor-display-num" id="floor-display">T</div>
+            <div class="direction-arrow" id="dir-arrow-down">▼</div>
+          </div>
+          <div class="door-frame">
+            <!-- Shaft view (visible during movement, behind doors) -->
+            <div class="shaft-view" id="shaft-view">
+              <div class="shaft-wall-l"></div>
+              <div class="shaft-wall-r"></div>
+              <div class="shaft-track"></div>
+              <div class="shaft-cable"></div>
+              <div class="shaft-markers" id="shaft-markers"></div>
+              <div class="shaft-speed"></div>
+              <div class="shaft-vignette"></div>
+            </div>
+            <!-- Lobby background -->
+            <div class="lobby-bg" id="lobby-bg"></div>
+            <!-- Doors -->
+            <div class="door-left" id="door-left"><div class="door-edge"></div></div>
+            <div class="door-seam" id="door-seam"></div>
+            <div class="door-right" id="door-right"><div class="door-edge"></div></div>
+          </div>
+        </div>
+        <div class="cabin-floor"></div>
+        <div class="arrive-flash" id="arrive-flash"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Floor buttons -->
+  <div class="panel right">
+    <div class="panel-section">
+      <div class="section-label">Selecionar Andar</div>
+      <div class="btn-panel">
+        <div class="btn-with-label">
+          <button class="floor-btn" id="btn-3" onclick="callFloor(3)">3</button>
+          <span class="floor-btn-label">3º ANDAR</span>
+        </div>
+        <div class="btn-with-label">
+          <button class="floor-btn" id="btn-2" onclick="callFloor(2)">2</button>
+          <span class="floor-btn-label">2º ANDAR</span>
+        </div>
+        <div class="btn-with-label">
+          <button class="floor-btn" id="btn-1" onclick="callFloor(1)">1</button>
+          <span class="floor-btn-label">1º ANDAR</span>
+        </div>
+        <div class="btn-with-label">
+          <button class="floor-btn" id="btn-0" onclick="callFloor(0)">T</button>
+          <span class="floor-btn-label">TÉRREO</span>
+        </div>
+        <div style="height:1px;width:100%;background:var(--border);margin:4px 0;"></div>
+        <div class="btn-with-label">
+          <div class="door-status-light open-light" id="door-light"></div>
+          <span class="floor-btn-label" id="door-status-text">PORTA ABERTA</span>
+        </div>
+        <button class="reset-btn" onclick="resetElevator()">RESET</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM: AFD Diagram -->
+  <div class="afd-panel">
+    <div class="afd-panel-header">
+      <div class="afd-panel-title">Diagrama do Autômato — δ : Q × Σ → Q</div>
+      <div class="afd-legend">
+        <div class="legend-item"><div class="legend-circle" style="background:var(--neon);box-shadow:0 0 6px var(--neon);"></div><span>Estado Atual</span></div>
+        <div class="legend-item"><div class="legend-circle" style="background:transparent;border:2px solid var(--neon);"></div><span>Aceitante (porta aberta)</span></div>
+        <div class="legend-item"><div class="legend-circle" style="background:var(--steel-light);border:1px solid var(--border);"></div><span>Estado Regular</span></div>
+      </div>
+    </div>
+    <svg id="afd-svg" viewBox="0 0 900 145" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+    </svg>
+  </div>
+</div>
+
+<script>
+/* ════════════════════ AFD ════════════════════ */
+const AFD_STATES = {
+  q0:{label:'T / Aberta',  floor:0,doors:'open',  dir:null, accepting:true },
+  q1:{label:'T / Fechada', floor:0,doors:'closed',dir:null, accepting:false},
+  q2:{label:'1F / Aberta', floor:1,doors:'open',  dir:null, accepting:true },
+  q3:{label:'1F / Fechada',floor:1,doors:'closed',dir:null, accepting:false},
+  q4:{label:'2F / Aberta', floor:2,doors:'open',  dir:null, accepting:true },
+  q5:{label:'2F / Fechada',floor:2,doors:'closed',dir:null, accepting:false},
+  q6:{label:'3F / Aberta', floor:3,doors:'open',  dir:null, accepting:true },
+  q7:{label:'3F / Fechada',floor:3,doors:'closed',dir:null, accepting:false},
+  q8:{label:'Subindo',     floor:null,doors:'closed',dir:'up',  accepting:false},
+  q9:{label:'Descendo',    floor:null,doors:'closed',dir:'down',accepting:false},
+};
+const AFD_TRANSITIONS = {
+  q0:{fechar:'q1'},
+  q1:{subir:'q8'},
+  q2:{fechar:'q3'},
+  q3:{subir:'q8',descer:'q9'},
+  q4:{fechar:'q5'},
+  q5:{subir:'q8',descer:'q9'},
+  q6:{fechar:'q7'},
+  q7:{descer:'q9'},
+  q8:{chegar_0:'q0',chegar_1:'q2',chegar_2:'q4',chegar_3:'q6'},
+  q9:{chegar_0:'q0',chegar_1:'q2',chegar_2:'q4',chegar_3:'q6'},
+};
+class ElevatorAFD {
+  constructor(){this.state='q0';this.log=[];}
+  transition(symbol){
+    const t=AFD_TRANSITIONS[this.state];
+    if(t&&t[symbol]){
+      const prev=this.state;this.state=t[symbol];
+      const entry={from:prev,sym:symbol,to:this.state};
+      this.log.unshift(entry);if(this.log.length>20)this.log.pop();
+      return entry;
+    }return null;
+  }
+  get doorsOpen(){return AFD_STATES[this.state].doors==='open';}
+}
+class ElevatorController {
+  constructor(){this.afd=new ElevatorAFD();this.queue=[];this.currentFloor=0;this.busy=false;this.doorTimer=null;this.DOOR_OPEN_MS=2000;this.FLOOR_TRAVEL_MS=1100;}
+  callFloor(floor){
+    if(this.queue.includes(floor)&&!this.busy)return;
+    if(floor===this.currentFloor&&this.afd.doorsOpen)return;
+    if(!this.queue.includes(floor))this.queue.push(floor);
+    ui.renderQueue(this.queue);ui.highlightButton(floor,'queued');
+    if(!this.busy)this._tryProcess();
+  }
+  _tryProcess(){
+    if(this.queue.length===0){this.busy=false;return;}
+    this.busy=true;
+    if(this.afd.doorsOpen){clearTimeout(this.doorTimer);this.doorTimer=setTimeout(()=>this._closeDoors(),this.DOOR_OPEN_MS);}
+    else this._startMoving();
+  }
+  _closeDoors(){
+    const entry=this.afd.transition('fechar');
+    if(entry){ui.logTransition(entry);ui.renderState(this.afd.state);ui.setDoorOpen(false);}
+    setTimeout(()=>this._startMoving(),450);
+  }
+  _startMoving(){
+    if(this.queue.length===0){this.busy=false;return;}
+    const target=this._pickTarget();
+    const direction=target>this.currentFloor?'up':'down';
+    const sym=direction==='up'?'subir':'descer';
+    const entry=this.afd.transition(sym);
+    if(entry){ui.logTransition(entry);ui.renderState(this.afd.state);ui.setMoving(true,direction);}
+    this._travelToFloor(target,direction);
+  }
+  _pickTarget(){return this.queue.reduce((best,f)=>Math.abs(f-this.currentFloor)<Math.abs(best-this.currentFloor)?f:best);}
+  _travelToFloor(target,direction){
+    const step=direction==='up'?1:-1;
+    const moveOneFloor=()=>{
+      this.currentFloor+=step;
+      ui.updateFloorDisplay(this.currentFloor,direction);
+      const idx=this.queue.indexOf(this.currentFloor);
+      if(idx!==-1){
+        this.queue.splice(idx,1);
+        ui.renderQueue(this.queue);ui.highlightButton(this.currentFloor,'current');
+        const sym=`chegar_${this.currentFloor}`;
+        const entry=this.afd.transition(sym);
+        if(entry)ui.logTransition(entry);
+        ui.setMoving(false,null);ui.setDoorOpen(true);ui.renderState(this.afd.state);ui.flashArrival();ui.updateLobby(this.currentFloor);
+        clearTimeout(this.doorTimer);
+        this.doorTimer=setTimeout(()=>{if(this.queue.length>0)this._closeDoors();else this.busy=false;},this.DOOR_OPEN_MS);
+      }else if(this.currentFloor!==target){setTimeout(moveOneFloor,this.FLOOR_TRAVEL_MS);}
+    };
+    setTimeout(moveOneFloor,this.FLOOR_TRAVEL_MS);
+  }
+  reset(){clearTimeout(this.doorTimer);this.afd=new ElevatorAFD();this.queue=[];this.currentFloor=0;this.busy=false;ui.fullReset();}
+}
+
+/* ════════════════ LOBBY SVGs WITH CATS ════════════════ */
+const LOBBY_SVGS = [
+
+/* ── TÉRREO: Warm golden lobby + Garfield (fat orange tabby) ── */
+`<svg viewBox="0 0 280 340" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <radialGradient id="ambT" cx="50%" cy="30%"><stop offset="0%" stop-color="#9a5c10"/><stop offset="100%" stop-color="#180d02"/></radialGradient>
+  <radialGradient id="chandG" cx="50%" cy="0%"><stop offset="0%" stop-color="#ffe898" stop-opacity="0.55"/><stop offset="100%" stop-color="#ffe898" stop-opacity="0"/></radialGradient>
+</defs>
+<!-- SKY/AMBIENT -->
+<rect width="280" height="340" fill="url(#ambT)"/>
+<!-- CEILING BOX -->
+<polygon points="0,0 280,0 192,128 88,128" fill="#0f0803"/>
+<polygon points="0,0 280,0 274,14 6,14" fill="rgba(220,160,50,0.08)"/>
+<!-- CEILING LIGHT STRIP -->
+<rect x="85" y="8" width="110" height="7" rx="3" fill="rgba(255,240,160,0.75)"/>
+<rect x="75" y="5" width="130" height="36" fill="rgba(255,230,130,0.08)"/>
+<!-- CHANDELIER STEM -->
+<rect x="138" y="0" width="4" height="42" fill="#c09020"/>
+<ellipse cx="140" cy="42" rx="30" ry="7" fill="none" stroke="#d0a828" stroke-width="1.4"/>
+<circle cx="140" cy="38" r="6" fill="#d4a820"/>
+<!-- CHANDELIER BULBS -->
+<line x1="110" y1="42" x2="98" y2="58" stroke="#c09020" stroke-width="1.3"/>
+<circle cx="98" cy="60" r="4" fill="#ffe860" opacity="0.97"/><circle cx="98" cy="60" r="12" fill="rgba(255,230,100,0.15)"/>
+<line x1="124" y1="48" x2="114" y2="64" stroke="#c09020" stroke-width="1.1"/>
+<circle cx="114" cy="66" r="3.5" fill="#ffe860" opacity="0.9"/>
+<line x1="140" y1="49" x2="140" y2="67" stroke="#c09020" stroke-width="1.3"/>
+<circle cx="140" cy="69" r="4" fill="#ffe860" opacity="0.97"/><circle cx="140" cy="69" r="12" fill="rgba(255,230,100,0.15)"/>
+<line x1="156" y1="48" x2="166" y2="64" stroke="#c09020" stroke-width="1.1"/>
+<circle cx="166" cy="66" r="3.5" fill="#ffe860" opacity="0.9"/>
+<line x1="170" y1="42" x2="182" y2="58" stroke="#c09020" stroke-width="1.3"/>
+<circle cx="182" cy="60" r="4" fill="#ffe860" opacity="0.97"/><circle cx="182" cy="60" r="12" fill="rgba(255,230,100,0.15)"/>
+<!-- CHANDELIER GLOW ON FLOOR -->
+<ellipse cx="140" cy="128" rx="80" ry="18" fill="url(#chandG)"/>
+<!-- MARBLE FLOOR -->
+<polygon points="0,340 280,340 192,128 88,128" fill="#231408"/>
+<!-- MARBLE TILES -->
+<line x1="140" y1="128" x2="0"   y2="340" stroke="#8a5818" stroke-width="0.7" opacity="0.38"/>
+<line x1="140" y1="128" x2="48"  y2="340" stroke="#7a4c14" stroke-width="0.55" opacity="0.28"/>
+<line x1="140" y1="128" x2="96"  y2="340" stroke="#6a4010" stroke-width="0.45" opacity="0.2"/>
+<line x1="140" y1="128" x2="144" y2="340" stroke="#6a4010" stroke-width="0.4" opacity="0.15"/>
+<line x1="140" y1="128" x2="190" y2="340" stroke="#6a4010" stroke-width="0.45" opacity="0.2"/>
+<line x1="140" y1="128" x2="236" y2="340" stroke="#7a4c14" stroke-width="0.55" opacity="0.28"/>
+<line x1="140" y1="128" x2="280" y2="340" stroke="#8a5818" stroke-width="0.7" opacity="0.38"/>
+<line x1="45"  y1="198" x2="235" y2="198" stroke="#7a4c14" stroke-width="0.6" opacity="0.3"/>
+<line x1="22"  y1="255" x2="258" y2="255" stroke="#6a4010" stroke-width="0.55" opacity="0.24"/>
+<line x1="6"   y1="308" x2="274" y2="308" stroke="#6a4010" stroke-width="0.5" opacity="0.18"/>
+<!-- MARBLE VEIN -->
+<path d="M10,230 Q70,215 110,248 Q150,282 185,258 Q230,235 275,245" stroke="rgba(210,170,70,0.07)" stroke-width="2" fill="none"/>
+<!-- LEFT WALL -->
+<polygon points="0,0 88,128 88,222 0,340" fill="#1a0e04"/>
+<!-- WALL SCONCE L -->
+<rect x="12" y="162" width="18" height="9" rx="2" fill="#d09020"/>
+<ellipse cx="21" cy="159" rx="26" ry="14" fill="rgba(255,200,60,0.18)"/>
+<line x1="21" y1="153" x2="21" y2="136" stroke="#c09020" stroke-width="1.2"/>
+<!-- RIGHT WALL -->
+<polygon points="280,0 192,128 192,222 280,340" fill="#1a0e04"/>
+<!-- WALL SCONCE R -->
+<rect x="250" y="162" width="18" height="9" rx="2" fill="#d09020"/>
+<ellipse cx="259" cy="159" rx="26" ry="14" fill="rgba(255,200,60,0.18)"/>
+<line x1="259" y1="153" x2="259" y2="136" stroke="#c09020" stroke-width="1.2"/>
+<!-- BACK WALL -->
+<rect x="88" y="128" width="104" height="94" fill="#130a02"/>
+<!-- BACK CORRIDOR DOOR -->
+<rect x="110" y="148" width="60" height="74" rx="1" fill="#0c0601" stroke="#4a2c10" stroke-width="1.2"/>
+<rect x="115" y="153" width="50" height="65" rx="1" fill="#080400"/>
+<!-- RECEPTION DESK -->
+<polygon points="50,340 230,340 216,304 64,304" fill="#301a08"/>
+<polygon points="64,304 216,304 208,288 72,288" fill="#402010"/>
+<rect x="74" y="288" width="132" height="3" fill="rgba(210,160,50,0.3)"/>
+<!-- DESK ITEMS: lamp & vase -->
+<rect x="134" y="272" width="3" height="16" fill="#9a6022"/>
+<polygon points="126,272 144,272 141,262 129,262" fill="#d09020" opacity="0.9"/>
+<ellipse cx="137" cy="275" rx="14" ry="5" fill="rgba(255,210,100,0.12)"/>
+<rect x="97" y="279" width="8" height="9" rx="1" fill="#4a2810"/>
+<circle cx="101" cy="277" r="5.5" fill="#a83040" opacity="0.9"/>
+<circle cx="105" cy="274" r="4" fill="#d04858" opacity="0.8"/>
+<circle cx="97"  cy="275" r="3.5" fill="#8a2838" opacity="0.7"/>
+<!-- LEFT PLANT -->
+<rect x="12" y="290" width="12" height="30" fill="#220e06" rx="1"/>
+<ellipse cx="18" cy="286" rx="18" ry="13" fill="#1e4208"/>
+<ellipse cx="9"  cy="278" rx="11" ry="8" fill="#224a0c"/>
+<ellipse cx="28" cy="278" rx="11" ry="8" fill="#183e08"/>
+<ellipse cx="18" cy="272" rx="9"  ry="6" fill="#265210"/>
+<!-- RIGHT PLANT -->
+<rect x="256" y="290" width="12" height="30" fill="#220e06" rx="1"/>
+<ellipse cx="262" cy="286" rx="18" ry="13" fill="#1e4208"/>
+<ellipse cx="253" cy="278" rx="11" ry="8" fill="#224a0c"/>
+<ellipse cx="272" cy="278" rx="11" ry="8" fill="#183e08"/>
+<ellipse cx="262" cy="272" rx="9"  ry="6" fill="#265210"/>
+<!-- FLOOR SIGN -->
+<rect x="4" y="125" width="55" height="15" rx="1" fill="#1a0e04" stroke="#5a3010" stroke-width="0.6"/>
+<text x="31" y="136" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(220,160,60,0.85)" letter-spacing="1">TÉRREO</text>
+
+<!-- 🐱 GARFIELD — fat orange tabby sitting on desk -->
+<!-- tail -->
+<path d="M200,285 Q224,265 218,278 Q212,290 198,282" stroke="#d4631a" stroke-width="7" fill="none" stroke-linecap="round"/>
+<!-- body -->
+<ellipse cx="188" cy="279" rx="26" ry="20" fill="#d4631a"/>
+<!-- belly -->
+<ellipse cx="188" cy="283" rx="18" ry="14" fill="#e8a050" opacity="0.7"/>
+<!-- stripes on body -->
+<line x1="172" y1="272" x2="175" y2="296" stroke="#a04010" stroke-width="1.8" opacity="0.5"/>
+<line x1="183" y1="270" x2="185" y2="295" stroke="#a04010" stroke-width="1.6" opacity="0.45"/>
+<line x1="195" y1="270" x2="195" y2="294" stroke="#a04010" stroke-width="1.4" opacity="0.4"/>
+<!-- head -->
+<circle cx="188" cy="260" r="20" fill="#d4631a"/>
+<!-- ear L -->
+<polygon points="172,250 168,237 180,246" fill="#d4631a"/><polygon points="173,249 170,240 179,245" fill="#e8a080"/>
+<!-- ear R -->
+<polygon points="205,250 208,237 197,246" fill="#d4631a"/><polygon points="204,249 207,240 198,245" fill="#e8a080"/>
+<!-- eyes - half closed (lazy) -->
+<ellipse cx="181" cy="257" rx="6" ry="4" fill="#1a2010"/>
+<ellipse cx="195" cy="257" rx="6" ry="4" fill="#1a2010"/>
+<ellipse cx="181" cy="257" rx="3.5" ry="2" fill="#50a820"/><!-- iris L -->
+<ellipse cx="195" cy="257" rx="3.5" ry="2" fill="#50a820"/><!-- iris R -->
+<circle cx="181" cy="257" r="1.5" fill="#080c04"/>
+<circle cx="195" cy="257" r="1.5" fill="#080c04"/>
+<!-- heavy eyelids (sleepy look) -->
+<path d="M175,254 Q181,252 187,254" stroke="#a04010" stroke-width="1.5" fill="none"/>
+<path d="M189,254 Q195,252 201,254" stroke="#a04010" stroke-width="1.5" fill="none"/>
+<!-- nose -->
+<ellipse cx="188" cy="264" rx="3" ry="2" fill="#c05040"/>
+<!-- smile (smug) -->
+<path d="M181,269 Q188,275 195,269" stroke="#902010" stroke-width="1.2" fill="none"/>
+<!-- whiskers L -->
+<line x1="165" y1="263" x2="180" y2="265" stroke="#c09060" stroke-width="0.8"/>
+<line x1="164" y1="267" x2="179" y2="267" stroke="#c09060" stroke-width="0.7"/>
+<line x1="165" y1="271" x2="180" y2="269" stroke="#c09060" stroke-width="0.6"/>
+<!-- whiskers R -->
+<line x1="196" y1="265" x2="211" y2="263" stroke="#c09060" stroke-width="0.8"/>
+<line x1="197" y1="267" x2="212" y2="267" stroke="#c09060" stroke-width="0.7"/>
+<line x1="196" y1="269" x2="211" y2="271" stroke="#c09060" stroke-width="0.6"/>
+<!-- BOW TIE (receptionist) -->
+<polygon points="183,279 188,282 183,285" fill="#c03040"/>
+<polygon points="193,279 188,282 193,285" fill="#c03040"/>
+<circle cx="188" cy="282" r="2.5" fill="#e04050"/>
+<!-- FLOOR LABEL -->
+<text x="140" y="335" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(200,150,50,0.6)" letter-spacing="2">LOBBY PRINCIPAL</text>
+</svg>`,
+
+/* ── 1º ANDAR: Corporate blue + Business Cat (gray tabby with glasses & tie) ── */
+`<svg viewBox="0 0 280 340" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <radialGradient id="amb1" cx="50%" cy="30%"><stop offset="0%" stop-color="#143060"/><stop offset="100%" stop-color="#04080e"/></radialGradient>
+  <radialGradient id="flr1" cx="50%" cy="0%"><stop offset="0%" stop-color="#2060c0" stop-opacity="0.18"/><stop offset="100%" stop-color="#2060c0" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="280" height="340" fill="url(#amb1)"/>
+<!-- CEILING -->
+<polygon points="0,0 280,0 192,128 88,128" fill="#06101e"/>
+<!-- FLUORESCENT STRIPS -->
+<rect x="82"  y="8" width="48" height="6" rx="2" fill="rgba(180,220,255,0.85)"/>
+<rect x="80"  y="5" width="52" height="30" fill="rgba(160,210,255,0.07)"/>
+<rect x="150" y="8" width="48" height="6" rx="2" fill="rgba(180,220,255,0.85)"/>
+<rect x="148" y="5" width="52" height="30" fill="rgba(160,210,255,0.07)"/>
+<!-- LIGHT BEAMS FROM STRIPS -->
+<polygon points="82,14 130,14 148,128 68,128" fill="rgba(160,210,255,0.04)"/>
+<polygon points="150,14 198,14 214,128 132,128" fill="rgba(160,210,255,0.04)"/>
+<!-- CARPET FLOOR -->
+<polygon points="0,340 280,340 192,128 88,128" fill="#0d1e38"/>
+<rect width="280" height="340" fill="url(#flr1)"/>
+<!-- CARPET GRID -->
+<line x1="140" y1="128" x2="0"   y2="340" stroke="#1a3868" stroke-width="0.65" opacity="0.45"/>
+<line x1="140" y1="128" x2="55"  y2="340" stroke="#1a3868" stroke-width="0.5"  opacity="0.3"/>
+<line x1="140" y1="128" x2="110" y2="340" stroke="#1a3868" stroke-width="0.4"  opacity="0.2"/>
+<line x1="140" y1="128" x2="170" y2="340" stroke="#1a3868" stroke-width="0.4"  opacity="0.2"/>
+<line x1="140" y1="128" x2="225" y2="340" stroke="#1a3868" stroke-width="0.5"  opacity="0.3"/>
+<line x1="140" y1="128" x2="280" y2="340" stroke="#1a3868" stroke-width="0.65" opacity="0.45"/>
+<line x1="40"  y1="204" x2="240" y2="204" stroke="#1a3868" stroke-width="0.55" opacity="0.32"/>
+<line x1="18"  y1="260" x2="262" y2="260" stroke="#1a3868" stroke-width="0.5"  opacity="0.26"/>
+<line x1="4"   y1="310" x2="276" y2="310" stroke="#1a3868" stroke-width="0.45" opacity="0.18"/>
+<!-- LEFT WALL -->
+<polygon points="0,0 88,128 88,222 0,340" fill="#08101e"/>
+<!-- OFFICE DOOR L -->
+<rect x="4" y="148" width="46" height="62" rx="1" fill="#060c18" stroke="#1e4070" stroke-width="0.9"/>
+<rect x="8" y="152" width="38" height="54" rx="1" fill="#040a12"/>
+<circle cx="46" cy="178" r="2" fill="#4888d0" opacity="0.9"/>
+<text x="27" y="142" text-anchor="middle" font-family="monospace" font-size="7" fill="rgba(80,160,255,0.65)">101</text>
+<!-- ART LEFT -->
+<rect x="4" y="220" width="40" height="52" rx="1" fill="#060e1e" stroke="#1e3860" stroke-width="0.5"/>
+<rect x="8" y="224" width="32" height="44" rx="1" fill="#040a14"/>
+<line x1="12" y1="230" x2="36" y2="264" stroke="rgba(70,140,255,0.35)" stroke-width="1.2"/>
+<line x1="36" y1="230" x2="12" y2="264" stroke="rgba(70,140,255,0.25)" stroke-width="0.9"/>
+<circle cx="24" cy="247" r="11" fill="none" stroke="rgba(80,160,255,0.3)" stroke-width="1.2"/>
+<!-- RIGHT WALL -->
+<polygon points="280,0 192,128 192,222 280,340" fill="#08101e"/>
+<!-- OFFICE DOOR R -->
+<rect x="230" y="148" width="46" height="62" rx="1" fill="#060c18" stroke="#1e4070" stroke-width="0.9"/>
+<rect x="234" y="152" width="38" height="54" rx="1" fill="#040a12"/>
+<circle cx="234" cy="178" r="2" fill="#4888d0" opacity="0.9"/>
+<text x="253" y="142" text-anchor="middle" font-family="monospace" font-size="7" fill="rgba(80,160,255,0.65)">102</text>
+<!-- ART RIGHT -->
+<rect x="236" y="220" width="40" height="52" rx="1" fill="#060e1e" stroke="#1e3860" stroke-width="0.5"/>
+<rect x="240" y="224" width="32" height="44" rx="1" fill="#040a14"/>
+<circle cx="256" cy="247" r="11" fill="none" stroke="rgba(80,160,255,0.3)" stroke-width="1.2"/>
+<line x1="240" y1="230" x2="264" y2="264" stroke="rgba(70,140,255,0.35)" stroke-width="1.2"/>
+<!-- BACK WALL -->
+<rect x="88" y="128" width="104" height="94" fill="#050c18"/>
+<!-- COMPANY SIGN -->
+<rect x="102" y="142" width="76" height="28" rx="2" fill="#040a14" stroke="#1e4070" stroke-width="0.6"/>
+<text x="140" y="155" text-anchor="middle" font-family="monospace" font-size="8" fill="rgba(80,160,255,0.7)" letter-spacing="1">CORP</text>
+<rect x="108" y="158" width="64" height="1.5" fill="rgba(80,160,255,0.25)"/>
+<text x="140" y="168" text-anchor="middle" font-family="monospace" font-size="5.5" fill="rgba(80,160,255,0.45)" letter-spacing="1">SOLUTIONS INC.</text>
+<!-- BACK DOOR -->
+<rect x="110" y="170" width="60" height="52" rx="1" fill="#03080e" stroke="#1e4070" stroke-width="0.8"/>
+<!-- FLOOR SIGN -->
+<rect x="4" y="125" width="55" height="15" rx="1" fill="#06101e" stroke="#1e4080" stroke-width="0.6"/>
+<text x="31" y="136" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(80,160,255,0.85)" letter-spacing="1">1° ANDAR</text>
+
+<!-- 🐱 BUSINESS CAT — gray tabby, standing, with tie and glasses -->
+<!-- tail -->
+<path d="M156,296 Q134,280 144,300 Q154,318 162,298" stroke="#7a8898" stroke-width="6" fill="none" stroke-linecap="round"/>
+<!-- body -->
+<ellipse cx="140" cy="302" rx="22" ry="18" fill="#8090a2"/>
+<!-- suit / shirt -->
+<ellipse cx="140" cy="306" rx="13" ry="13" fill="#d0d8e0" opacity="0.7"/>
+<!-- legs -->
+<rect x="130" y="316" width="8" height="14" rx="3" fill="#8090a2"/>
+<rect x="142" y="316" width="8" height="14" rx="3" fill="#8090a2"/>
+<!-- feet -->
+<ellipse cx="134" cy="330" rx="6" ry="3" fill="#606878"/>
+<ellipse cx="146" cy="330" rx="6" ry="3" fill="#606878"/>
+<!-- head -->
+<circle cx="140" cy="281" r="19" fill="#8090a2"/>
+<!-- tabby stripes on head -->
+<path d="M126,274 Q131,272 136,275" stroke="#5a6878" stroke-width="1.4" fill="none" opacity="0.6"/>
+<path d="M144,275 Q149,272 154,274" stroke="#5a6878" stroke-width="1.4" fill="none" opacity="0.6"/>
+<!-- ear L -->
+<polygon points="124,272 120,259 132,268" fill="#8090a2"/><polygon points="125,271 122,262 131,267" fill="#c0a0a8"/>
+<!-- ear R -->
+<polygon points="156,272 160,259 148,268" fill="#8090a2"/><polygon points="155,271 158,262 149,267" fill="#c0a0a8"/>
+<!-- eyes (alert, professional) -->
+<ellipse cx="133" cy="279" rx="5.5" ry="5.5" fill="#180e06"/>
+<ellipse cx="147" cy="279" rx="5.5" ry="5.5" fill="#180e06"/>
+<ellipse cx="133" cy="279" rx="3" ry="4" fill="#e8d040"/><!-- iris L -->
+<ellipse cx="147" cy="279" rx="3" ry="4" fill="#e8d040"/><!-- iris R -->
+<circle cx="133" cy="279" r="1.8" fill="#080604"/>
+<circle cx="147" cy="279" r="1.8" fill="#080604"/>
+<!-- GLASSES -->
+<rect x="126" y="274" width="13" height="10" rx="4" fill="none" stroke="#404850" stroke-width="1.4"/>
+<rect x="141" y="274" width="13" height="10" rx="4" fill="none" stroke="#404850" stroke-width="1.4"/>
+<line x1="139" y1="278" x2="141" y2="278" stroke="#404850" stroke-width="1.4"/>
+<line x1="122" y1="277" x2="126" y2="277" stroke="#404850" stroke-width="1.2"/>
+<line x1="154" y1="277" x2="158" y2="277" stroke="#404850" stroke-width="1.2"/>
+<!-- nose -->
+<ellipse cx="140" cy="286" rx="2.5" ry="1.8" fill="#b07080"/>
+<!-- mouth (serious) -->
+<line x1="135" y1="290" x2="145" y2="290" stroke="#806070" stroke-width="1"/>
+<!-- whiskers L -->
+<line x1="118" y1="285" x2="131" y2="286" stroke="#a0b0c0" stroke-width="0.7"/>
+<line x1="118" y1="288" x2="131" y2="288" stroke="#a0b0c0" stroke-width="0.6"/>
+<!-- whiskers R -->
+<line x1="149" y1="286" x2="162" y2="285" stroke="#a0b0c0" stroke-width="0.7"/>
+<line x1="149" y1="288" x2="162" y2="288" stroke="#a0b0c0" stroke-width="0.6"/>
+<!-- BUSINESS TIE -->
+<polygon points="137,297 140,294 143,297 141,312 139,312" fill="#2848c0"/>
+<polygon points="136,296 140,292 144,296" fill="#3058d8"/>
+<!-- arm holding folder -->
+<ellipse cx="126" cy="307" rx="8" ry="5" fill="#8090a2"/>
+<rect x="114" y="302" width="16" height="12" rx="1" fill="#d0d8e0" stroke="#9090a0" stroke-width="0.5"/>
+<!-- FLOOR LABEL -->
+<text x="140" y="335" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(80,160,255,0.6)" letter-spacing="2">ESCRITÓRIOS</text>
+</svg>`,
+
+/* ── 2º ANDAR: Conference green + Sleeping black cat on table ── */
+`<svg viewBox="0 0 280 340" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <radialGradient id="amb2" cx="50%" cy="30%"><stop offset="0%" stop-color="#085c3a"/><stop offset="100%" stop-color="#010e06"/></radialGradient>
+  <radialGradient id="tbl2" cx="50%" cy="0%"><stop offset="0%" stop-color="#30d090" stop-opacity="0.2"/><stop offset="100%" stop-color="#30d090" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="280" height="340" fill="url(#amb2)"/>
+<!-- CEILING -->
+<polygon points="0,0 280,0 192,128 88,128" fill="#030d06"/>
+<!-- PENDANT LIGHTS (3) -->
+<line x1="96"  y1="0" x2="96"  y2="30" stroke="#20a870" stroke-width="1.2" opacity="0.9"/>
+<ellipse cx="96"  cy="33" rx="12" ry="5" fill="#20a870" opacity="0.85"/>
+<ellipse cx="96"  cy="40" rx="28" ry="12" fill="rgba(30,168,112,0.12)"/>
+<line x1="140" y1="0" x2="140" y2="30" stroke="#20a870" stroke-width="1.2" opacity="0.9"/>
+<ellipse cx="140" cy="33" rx="12" ry="5" fill="#20a870" opacity="0.85"/>
+<ellipse cx="140" cy="40" rx="28" ry="12" fill="rgba(30,168,112,0.14)"/>
+<line x1="184" y1="0" x2="184" y2="30" stroke="#20a870" stroke-width="1.2" opacity="0.9"/>
+<ellipse cx="184" cy="33" rx="12" ry="5" fill="#20a870" opacity="0.85"/>
+<ellipse cx="184" cy="40" rx="28" ry="12" fill="rgba(30,168,112,0.12)"/>
+<!-- FLOOR -->
+<polygon points="0,340 280,340 192,128 88,128" fill="#071a0d"/>
+<!-- WOOD FLOOR PLANKS -->
+<line x1="140" y1="128" x2="0"   y2="340" stroke="#103a1e" stroke-width="0.7" opacity="0.45"/>
+<line x1="140" y1="128" x2="50"  y2="340" stroke="#0d3018" stroke-width="0.55" opacity="0.3"/>
+<line x1="140" y1="128" x2="105" y2="340" stroke="#103a1e" stroke-width="0.45" opacity="0.22"/>
+<line x1="140" y1="128" x2="175" y2="340" stroke="#103a1e" stroke-width="0.45" opacity="0.22"/>
+<line x1="140" y1="128" x2="230" y2="340" stroke="#0d3018" stroke-width="0.55" opacity="0.3"/>
+<line x1="140" y1="128" x2="280" y2="340" stroke="#103a1e" stroke-width="0.7" opacity="0.45"/>
+<line x1="36"  y1="200" x2="244" y2="200" stroke="#103a1e" stroke-width="0.6" opacity="0.32"/>
+<line x1="14"  y1="258" x2="266" y2="258" stroke="#103a1e" stroke-width="0.55" opacity="0.26"/>
+<line x1="2"   y1="310" x2="278" y2="310" stroke="#103a1e" stroke-width="0.5"  opacity="0.18"/>
+<!-- LEFT WALL -->
+<polygon points="0,0 88,128 88,224 0,340" fill="#051009"/>
+<!-- GLASS PARTITION L -->
+<polygon points="4,148 82,148 82,208 4,208" fill="rgba(30,168,112,0.06)" stroke="rgba(30,168,112,0.28)" stroke-width="0.9"/>
+<line x1="23" y1="148" x2="23" y2="208" stroke="rgba(30,168,112,0.18)" stroke-width="0.7"/>
+<line x1="44" y1="148" x2="44" y2="208" stroke="rgba(30,168,112,0.12)" stroke-width="0.6"/>
+<line x1="63" y1="148" x2="63" y2="208" stroke="rgba(30,168,112,0.18)" stroke-width="0.7"/>
+<!-- LEFT PLANT -->
+<rect x="4"  y="290" width="10" height="26" fill="#061008" rx="1"/>
+<ellipse cx="9"  cy="286" rx="16" ry="12" fill="#0d2e0e"/>
+<ellipse cx="2"  cy="277" rx="9"  ry="7"  fill="#124014"/>
+<ellipse cx="18" cy="277" rx="9"  ry="7"  fill="#0e3610"/>
+<ellipse cx="9"  cy="270" rx="7"  ry="5"  fill="#164a16"/>
+<!-- RIGHT WALL -->
+<polygon points="280,0 192,128 192,224 280,340" fill="#051009"/>
+<!-- GLASS PARTITION R -->
+<polygon points="276,148 198,148 198,208 276,208" fill="rgba(30,168,112,0.06)" stroke="rgba(30,168,112,0.28)" stroke-width="0.9"/>
+<line x1="216" y1="148" x2="216" y2="208" stroke="rgba(30,168,112,0.18)" stroke-width="0.7"/>
+<line x1="236" y1="148" x2="236" y2="208" stroke="rgba(30,168,112,0.12)" stroke-width="0.6"/>
+<line x1="257" y1="148" x2="257" y2="208" stroke="rgba(30,168,112,0.18)" stroke-width="0.7"/>
+<!-- RIGHT PLANT -->
+<rect x="266" y="290" width="10" height="26" fill="#061008" rx="1"/>
+<ellipse cx="271" cy="286" rx="16" ry="12" fill="#0d2e0e"/>
+<ellipse cx="262" cy="277" rx="9"  ry="7"  fill="#124014"/>
+<ellipse cx="278" cy="277" rx="9"  ry="7"  fill="#0e3610"/>
+<!-- BACK WALL -->
+<rect x="88" y="128" width="104" height="96" fill="#040c06"/>
+<!-- SALA SIGN -->
+<rect x="102" y="140" width="76" height="24" rx="2" fill="#040e08" stroke="#103a1e" stroke-width="0.7"/>
+<text x="140" y="156" text-anchor="middle" font-family="monospace" font-size="9" fill="rgba(40,200,130,0.75)" letter-spacing="1">SALA 2A</text>
+<!-- BACK DOOR (glass) -->
+<rect x="108" y="164" width="64" height="60" rx="1" fill="#03080c" stroke="#103a1e" stroke-width="0.8"/>
+<rect x="112" y="168" width="56" height="52" rx="1" fill="rgba(30,168,112,0.07)" stroke="#103a1e" stroke-width="0.3"/>
+<!-- CONFERENCE TABLE -->
+<ellipse cx="140" cy="252" rx="62" ry="19" fill="#0a2214" stroke="#103a1e" stroke-width="0.7"/>
+<rect    x="78"  cy="252" width="124" height="20" fill="#0a2214" y="252"/>
+<ellipse cx="140" cy="272" rx="62" ry="8" fill="#071408"/>
+<ellipse cx="140" cy="252" rx="62" ry="19" fill="url(#tbl2)"/>
+<!-- CHAIRS AROUND TABLE -->
+<rect x="86"  y="238" width="20" height="11" rx="3" fill="#071408"/>
+<rect x="116" y="234" width="20" height="11" rx="3" fill="#071408"/>
+<rect x="148" y="234" width="20" height="11" rx="3" fill="#071408"/>
+<rect x="178" y="238" width="20" height="11" rx="3" fill="#071408"/>
+<rect x="90"  y="277" width="20" height="11" rx="3" fill="#071408"/>
+<rect x="122" y="281" width="20" height="11" rx="3" fill="#071408"/>
+<rect x="152" y="281" width="20" height="11" rx="3" fill="#071408"/>
+<rect x="176" y="277" width="20" height="11" rx="3" fill="#071408"/>
+<!-- FLOOR SIGN -->
+<rect x="4" y="125" width="55" height="15" rx="1" fill="#040e08" stroke="#103a1e" stroke-width="0.6"/>
+<text x="31" y="136" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(40,200,130,0.85)" letter-spacing="1">2° ANDAR</text>
+
+<!-- 🐱 SLEEPING BLACK CAT — curled on conference table -->
+<!-- body curl -->
+<ellipse cx="140" cy="246" rx="24" ry="13" fill="#181820" transform="rotate(-10,140,246)"/>
+<ellipse cx="140" cy="246" rx="18" ry="9" fill="#222230" transform="rotate(-10,140,246)"/>
+<!-- tail wrapping around -->
+<path d="M154,252 Q170,240 165,255 Q158,268 148,256" stroke="#181820" stroke-width="7" fill="none" stroke-linecap="round"/>
+<!-- head (tucked down) -->
+<circle cx="124" cy="242" r="13" fill="#181820"/>
+<!-- ear L (folded) -->
+<polygon points="115,233 111,222 122,231" fill="#181820"/>
+<!-- ear R -->
+<polygon points="127,231 130,220 135,230" fill="#181820"/>
+<!-- CLOSED EYES (zzz) -->
+<path d="M118,240 Q121,237 124,240" stroke="#503050" stroke-width="1.5" fill="none"/>
+<path d="M124,240 Q127,237 130,240" stroke="#503050" stroke-width="1.5" fill="none"/>
+<!-- tiny zzz text -->
+<text x="136" y="228" font-family="monospace" font-size="9" fill="rgba(100,200,150,0.55)" font-style="italic">zzz</text>
+<!-- nose -->
+<ellipse cx="124" cy="246" rx="2" ry="1.5" fill="#903060"/>
+<!-- white spot on chest -->
+<ellipse cx="140" cy="247" rx="7" ry="5" fill="#282838"/>
+<!-- FLOOR LABEL -->
+<text x="140" y="335" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(40,200,130,0.6)" letter-spacing="2">REUNIÕES</text>
+</svg>`,
+
+/* ── 3º ANDAR: Executive purple + Boss white Persian cat on throne ── */
+`<svg viewBox="0 0 280 340" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <radialGradient id="amb3" cx="50%" cy="30%"><stop offset="0%" stop-color="#300860"/><stop offset="100%" stop-color="#06010c"/></radialGradient>
+  <radialGradient id="artg3" cx="50%" cy="50%"><stop offset="0%" stop-color="#8840ff" stop-opacity="0.45"/><stop offset="100%" stop-color="#8840ff" stop-opacity="0"/></radialGradient>
+  <radialGradient id="flr3" cx="50%" cy="0%"><stop offset="0%" stop-color="#7030d0" stop-opacity="0.2"/><stop offset="100%" stop-color="#7030d0" stop-opacity="0"/></radialGradient>
+  <radialGradient id="catGlow3" cx="50%" cy="30%"><stop offset="0%" stop-color="#f0e8ff" stop-opacity="0.5"/><stop offset="100%" stop-color="#f0e8ff" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="280" height="340" fill="url(#amb3)"/>
+<!-- CEILING -->
+<polygon points="0,0 280,0 192,128 88,128" fill="#0c0420"/>
+<!-- LUXURY CEILING RING LIGHT -->
+<ellipse cx="140" cy="20" rx="62" ry="10" fill="none" stroke="rgba(180,90,255,0.7)" stroke-width="1.5"/>
+<ellipse cx="140" cy="20" rx="48" ry="8"  fill="rgba(160,80,255,0.18)"/>
+<ellipse cx="140" cy="28" rx="62" ry="20" fill="rgba(140,60,255,0.08)"/>
+<!-- CRYSTAL CHANDELIER STEM -->
+<line x1="140" y1="0" x2="140" y2="30" stroke="#a070d8" stroke-width="2"/>
+<ellipse cx="140" cy="30" rx="22" ry="6" fill="none" stroke="#b080e0" stroke-width="1.2"/>
+<circle cx="140" cy="26" r="7" fill="#b880e8"/>
+<!-- CRYSTAL DROPS -->
+<line x1="118" y1="30" x2="112" y2="44" stroke="#d0a8ff" stroke-width="1"/>
+<polygon points="110,44 114,44 112,51" fill="#e0b8ff" opacity="0.8"/>
+<line x1="128" y1="35" x2="123" y2="49" stroke="#d0a8ff" stroke-width="1"/>
+<polygon points="121,49 125,49 123,56" fill="#e0b8ff" opacity="0.75"/>
+<line x1="140" y1="36" x2="140" y2="51" stroke="#d0a8ff" stroke-width="1"/>
+<polygon points="138,51 142,51 140,58" fill="#e0b8ff" opacity="0.8"/>
+<line x1="152" y1="35" x2="157" y2="49" stroke="#d0a8ff" stroke-width="1"/>
+<polygon points="155,49 159,49 157,56" fill="#e0b8ff" opacity="0.75"/>
+<line x1="162" y1="30" x2="168" y2="44" stroke="#d0a8ff" stroke-width="1"/>
+<polygon points="166,44 170,44 168,51" fill="#e0b8ff" opacity="0.8"/>
+<!-- GLOW ON FLOOR FROM CHANDELIER -->
+<ellipse cx="140" cy="120" rx="58" ry="12" fill="rgba(160,80,255,0.1)"/>
+<!-- DARK MARBLE FLOOR -->
+<polygon points="0,340 280,340 192,128 88,128" fill="#14052a"/>
+<rect width="280" height="340" fill="url(#flr3)"/>
+<!-- MARBLE VEINS -->
+<line x1="140" y1="128" x2="0"   y2="340" stroke="#340a78" stroke-width="0.7" opacity="0.45"/>
+<line x1="140" y1="128" x2="52"  y2="340" stroke="#300870" stroke-width="0.6" opacity="0.3"/>
+<line x1="140" y1="128" x2="110" y2="340" stroke="#2c0668" stroke-width="0.5" opacity="0.22"/>
+<line x1="140" y1="128" x2="170" y2="340" stroke="#2c0668" stroke-width="0.5" opacity="0.22"/>
+<line x1="140" y1="128" x2="228" y2="340" stroke="#300870" stroke-width="0.6" opacity="0.3"/>
+<line x1="140" y1="128" x2="280" y2="340" stroke="#340a78" stroke-width="0.7" opacity="0.45"/>
+<line x1="40"  y1="206" x2="240" y2="206" stroke="#340a78" stroke-width="0.55" opacity="0.28"/>
+<line x1="16"  y1="262" x2="264" y2="262" stroke="#340a78" stroke-width="0.5"  opacity="0.22"/>
+<!-- PURPLE VEIN -->
+<path d="M0,218 Q88,204 128,238 Q168,272 204,248 Q244,224 280,234" stroke="rgba(180,80,255,0.08)" stroke-width="2.5" fill="none"/>
+<ellipse cx="140" cy="318" rx="90" ry="20" fill="rgba(130,50,230,0.08)"/>
+<!-- LEFT WALL -->
+<polygon points="0,0 88,128 88,224 0,340" fill="#100320"/>
+<!-- ART PANEL L -->
+<rect x="4"  y="138" width="50" height="72" rx="2" fill="#1c0630" stroke="#5a2090" stroke-width="0.8"/>
+<rect x="8"  y="142" width="42" height="64" rx="1" fill="url(#artg3)"/>
+<circle cx="29" cy="174" r="16" fill="none" stroke="rgba(210,110,255,0.55)" stroke-width="1.2"/>
+<circle cx="29" cy="174" r="9"  fill="none" stroke="rgba(185,85,255,0.4)"  stroke-width="0.9"/>
+<line x1="13" y1="158" x2="45" y2="190" stroke="rgba(225,130,255,0.4)" stroke-width="1"/>
+<line x1="45" y1="158" x2="13" y2="190" stroke="rgba(185,85,255,0.3)"  stroke-width="0.8"/>
+<rect x="4"  y="138" width="50" height="72" rx="2" fill="none" stroke="rgba(200,100,255,0.35)" stroke-width="0.6"/>
+<!-- SCONCE L -->
+<rect x="8" y="222" width="18" height="9" rx="2" fill="#9848d0" opacity="0.9"/>
+<ellipse cx="17" cy="219" rx="28" ry="12" fill="rgba(180,80,255,0.18)"/>
+<!-- RIGHT WALL -->
+<polygon points="280,0 192,128 192,224 280,340" fill="#100320"/>
+<!-- ART PANEL R -->
+<rect x="226" y="138" width="50" height="72" rx="2" fill="#1c0630" stroke="#5a2090" stroke-width="0.8"/>
+<rect x="230" y="142" width="42" height="64" rx="1" fill="url(#artg3)"/>
+<circle cx="251" cy="174" r="16" fill="none" stroke="rgba(210,110,255,0.55)" stroke-width="1.2"/>
+<circle cx="251" cy="174" r="9"  fill="none" stroke="rgba(185,85,255,0.4)"  stroke-width="0.9"/>
+<line x1="235" y1="158" x2="267" y2="190" stroke="rgba(225,130,255,0.4)" stroke-width="1"/>
+<rect x="226" y="138" width="50" height="72" rx="2" fill="none" stroke="rgba(200,100,255,0.35)" stroke-width="0.6"/>
+<!-- SCONCE R -->
+<rect x="254" y="222" width="18" height="9" rx="2" fill="#9848d0" opacity="0.9"/>
+<ellipse cx="263" cy="219" rx="28" ry="12" fill="rgba(180,80,255,0.18)"/>
+<!-- BACK WALL -->
+<rect x="88" y="128" width="104" height="96" fill="#0c0318"/>
+<!-- BIG ILLUMINATED ART -->
+<rect x="94"  y="134" width="92" height="64" rx="3" fill="#180530" stroke="#5a2090" stroke-width="0.8"/>
+<rect x="98"  y="138" width="84" height="56" rx="2" fill="url(#artg3)"/>
+<circle cx="140" cy="166" r="19" fill="none" stroke="rgba(210,110,255,0.6)"  stroke-width="1.5"/>
+<circle cx="140" cy="166" r="11" fill="none" stroke="rgba(185,85,255,0.45)" stroke-width="1"/>
+<line x1="121" y1="166" x2="159" y2="166" stroke="rgba(210,110,255,0.45)" stroke-width="1"/>
+<line x1="140" y1="147" x2="140" y2="185" stroke="rgba(210,110,255,0.45)" stroke-width="1"/>
+<circle cx="140" cy="166" r="3.5" fill="rgba(230,140,255,0.8)"/>
+<!-- BACK DOOR -->
+<rect x="112" y="198" width="56" height="26" rx="1" fill="#080214" stroke="#5a2090" stroke-width="0.6"/>
+<!-- EXECUTIVE CHAIR -->
+<rect x="108" y="254" width="64" height="36" rx="5" fill="#1c0538" stroke="#5a2090" stroke-width="0.7"/>
+<rect x="112" y="245" width="56" height="14" rx="4" fill="#260640"/>
+<rect x="104" y="254" width="8"  height="28" rx="2" fill="#1c0538"/>
+<rect x="168" y="254" width="8"  height="28" rx="2" fill="#1c0538"/>
+<line x1="116" y1="290" x2="112" y2="302" stroke="#300850" stroke-width="2"/>
+<line x1="140" y1="290" x2="140" y2="302" stroke="#300850" stroke-width="2"/>
+<line x1="164" y1="290" x2="168" y2="302" stroke="#300850" stroke-width="2"/>
+<ellipse cx="140" cy="303" rx="30" ry="5" fill="#180530"/>
+<!-- EXECUTIVE DESK edge -->
+<rect x="84" y="298" width="112" height="12" rx="3" fill="#1c0538" stroke="#5a2090" stroke-width="0.6"/>
+<!-- FLOOR SIGN -->
+<rect x="4" y="125" width="60" height="15" rx="1" fill="#140422" stroke="#5a2090" stroke-width="0.6"/>
+<text x="34" y="136" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(210,110,255,0.9)" letter-spacing="1">DIRETORIA</text>
+
+<!-- 🐱 BOSS PERSIAN CAT — white fluffy sitting on executive chair, looking smug and superior -->
+<!-- fluffy body -->
+<ellipse cx="140" cy="270" rx="28" ry="24" fill="#f2eef8"/>
+<!-- fluffy chest/mane -->
+<ellipse cx="140" cy="275" rx="20" ry="18" fill="#ffffff" opacity="0.85"/>
+<!-- fur texture hints -->
+<ellipse cx="126" cy="265" rx="10" ry="8" fill="#ece8f4" opacity="0.6"/>
+<ellipse cx="154" cy="265" rx="10" ry="8" fill="#ece8f4" opacity="0.6"/>
+<!-- paws on desk -->
+<ellipse cx="124" cy="298" rx="9" ry="5" fill="#f0ecf8"/>
+<ellipse cx="156" cy="298" rx="9" ry="5" fill="#f0ecf8"/>
+<!-- tail draped over chair arm -->
+<path d="M162,278 Q182,268 180,283 Q178,295 163,286" stroke="#f2eef8" stroke-width="8" fill="none" stroke-linecap="round"/>
+<!-- head (round, fluffy Persian) -->
+<circle cx="140" cy="245" r="24" fill="#f2eef8"/>
+<!-- Persian flat face / extra fluff -->
+<circle cx="140" cy="245" r="20" fill="#ffffff" opacity="0.5"/>
+<!-- fluff on sides of head -->
+<ellipse cx="118" cy="245" rx="12" ry="14" fill="#f2eef8" opacity="0.7"/>
+<ellipse cx="162" cy="245" rx="12" ry="14" fill="#f2eef8" opacity="0.7"/>
+<!-- ears (small, barely visible in fluff) -->
+<polygon points="124,228 120,216 132,224" fill="#e8e0f0"/><polygon points="125,227 122,219 131,223" fill="#f0c8d0"/>
+<polygon points="156,228 160,216 148,224" fill="#e8e0f0"/><polygon points="155,227 158,219 149,223" fill="#f0c8d0"/>
+<!-- EYES — big, slightly judgmental (half-lidded, blue eyes) -->
+<ellipse cx="132" cy="242" rx="7" ry="7" fill="#101828"/>
+<ellipse cx="148" cy="242" rx="7" ry="7" fill="#101828"/>
+<ellipse cx="132" cy="242" rx="5" ry="5" fill="#4888d8"/><!-- iris L -->
+<ellipse cx="148" cy="242" rx="5" ry="5" fill="#4888d8"/><!-- iris R -->
+<ellipse cx="132" cy="242" rx="2.5" ry="3" fill="#060808"/>
+<ellipse cx="148" cy="242" rx="2.5" ry="3" fill="#060808"/>
+<circle cx="130" cy="240" r="1.5" fill="rgba(255,255,255,0.6)"/><!-- eye shine L -->
+<circle cx="146" cy="240" r="1.5" fill="rgba(255,255,255,0.6)"/><!-- eye shine R -->
+<!-- heavy half-lids (judgmental look) -->
+<path d="M125,239 Q132,236 139,239" stroke="#c0b8d0" stroke-width="1.8" fill="rgba(240,235,248,0.5)"/>
+<path d="M141,239 Q148,236 155,239" stroke="#c0b8d0" stroke-width="1.8" fill="rgba(240,235,248,0.5)"/>
+<!-- flat nose (Persian) -->
+<ellipse cx="140" cy="249" rx="4" ry="3" fill="#e090b0"/>
+<!-- smug tiny mouth -->
+<path d="M135,254 Q140,257 145,254" stroke="#c080a0" stroke-width="1.2" fill="none"/>
+<!-- whiskers -->
+<line x1="112" y1="249" x2="131" y2="250" stroke="#d8d0e8" stroke-width="0.9"/>
+<line x1="112" y1="253" x2="131" y2="252" stroke="#d8d0e8" stroke-width="0.8"/>
+<line x1="149" y1="250" x2="168" y2="249" stroke="#d8d0e8" stroke-width="0.9"/>
+<line x1="149" y1="252" x2="168" y2="253" stroke="#d8d0e8" stroke-width="0.8"/>
+<!-- CROWN (boss!) -->
+<polygon points="128,224 132,212 136,222 140,210 144,222 148,212 152,224" fill="#e8b820" stroke="#c09010" stroke-width="0.8"/>
+<circle cx="140" cy="211" r="3" fill="#e84040"/>
+<circle cx="132" cy="213" r="2" fill="#40c0e0"/>
+<circle cx="148" cy="213" r="2" fill="#40c0e0"/>
+<!-- CAT GLOW (aura of superiority) -->
+<ellipse cx="140" cy="260" rx="36" ry="30" fill="url(#catGlow3)" opacity="0.4"/>
+<!-- FLOOR LABEL -->
+<text x="140" y="335" text-anchor="middle" font-family="monospace" font-size="7.5" fill="rgba(210,110,255,0.65)" letter-spacing="2">3° ANDAR · EXECUTIVO</text>
+</svg>`
+];
+
+/* ════════════ UI Controller ════════════ */
+const ui = {
+  scene:          document.getElementById('elevator-scene'),
+  floorDisplay:   document.getElementById('floor-display'),
+  dirUp:          document.getElementById('dir-arrow-up'),
+  dirDown:        document.getElementById('dir-arrow-down'),
+  lobbyBg:        document.getElementById('lobby-bg'),
+  arriveFlash:    document.getElementById('arrive-flash'),
+  stateId:        document.getElementById('state-id'),
+  stateName:      document.getElementById('state-name'),
+  stateBadge:     document.getElementById('state-badge'),
+  logContainer:   document.getElementById('log-container'),
+  queueDisplay:   document.getElementById('queue-display'),
+  doorLight:      document.getElementById('door-light'),
+  doorStatusText: document.getElementById('door-status-text'),
+  shaftEl:        document.getElementById('building-shaft'),
+  trajCabin:      document.getElementById('traj-cabin'),
+  trajCabinLabel: document.getElementById('traj-cabin-label'),
+  trajCable:      document.getElementById('traj-cable'),
+  trajMotion:     document.getElementById('traj-motion-dots'),
+  FLOOR_NAMES:    ['T','1','2','3'],
+
+  // Floor bottom positions in the 220px shaft (floor 0=bottom, 3=top)
+  // shaft height 220, 4 floors × 55px each
+  // cabin height 48px, starts 4px from bottom of each floor slot
+  TRAJ_BOTTOMS: [4, 59, 114, 169], // px from bottom of shaft
+
+  _updateTraj(floor, doorsOpen, moving, direction) {
+    const bottom = this.TRAJ_BOTTOMS[floor];
+    // Animate cabin
+    this.trajCabin.style.bottom = bottom + 'px';
+    // Cable stretches from top of shaft to top of cabin
+    const cabinTop = bottom + 48; // cabin top px from shaft bottom
+    const shaftH = 220;
+    const cableH = shaftH - cabinTop - 2;
+    this.trajCable.style.height = Math.max(0, cableH) + 'px';
+    this.trajCable.style.bottom = (cabinTop + 2) + 'px';
+    // Cabin label
+    this.trajCabinLabel.textContent = this.FLOOR_NAMES[floor];
+    // Floor dots
+    for (let f = 0; f < 4; f++) {
+      document.getElementById(`bdot-${f}`).classList.toggle('active', f === floor);
+    }
+    // Floor doors
+    for (let f = 0; f < 4; f++) {
+      const floorEl = document.getElementById(`bfloor-${f}`);
+      floorEl.classList.toggle('doors-open', f === floor && doorsOpen);
+    }
+    // Motion dots
+    this.trajMotion.classList.toggle('visible', moving);
+    this.shaftEl.classList.remove('moving-up','moving-down');
+    if (moving) this.shaftEl.classList.add(direction === 'up' ? 'moving-up' : 'moving-down');
+  },
+
+  _trajMovingFloor(floor, direction) {
+    // While moving, show cabin sliding between floors
+    const bottom = this.TRAJ_BOTTOMS[floor];
+    this.trajCabin.style.bottom = bottom + 'px';
+    this.trajCabinLabel.textContent = this.FLOOR_NAMES[floor];
+    const cabinTop = bottom + 48;
+    const cableH = 220 - cabinTop - 2;
+    this.trajCable.style.height = Math.max(0, cableH) + 'px';
+    this.trajCable.style.bottom = (cabinTop + 2) + 'px';
+    // Update all dots to none active during movement
+    for (let f = 0; f < 4; f++) {
+      document.getElementById(`bdot-${f}`).classList.remove('active');
+    }
+  },
+
+  _initShaftMarkers() {
+    const el = document.getElementById('shaft-markers');
+    if (!el) return;
+    el.innerHTML='';
+    for(let i=0;i<8;i++){
+      const d=document.createElement('div');
+      d.className='shaft-marker';
+      d.style.top=(i*140-20)+'px';
+      el.appendChild(d);
+    }
+  },
+
+  updateFloorDisplay(floor, direction) {
+    this.floorDisplay.textContent=this.FLOOR_NAMES[floor];
+    this.floorDisplay.style.opacity='0.2';
+    this.floorDisplay.style.transform='scale(0.85)';
+    setTimeout(()=>{
+      this.floorDisplay.style.opacity='1';
+      this.floorDisplay.style.transform='scale(1)';
+    },160);
+    // Update trajectory (moving, no doors)
+    this._trajMovingFloor(floor, direction);
+  },
+
+  updateLobby(floor) {
+    this.lobbyBg.style.opacity='0';
+    setTimeout(()=>{
+      this.lobbyBg.innerHTML=LOBBY_SVGS[floor]||'';
+      this.lobbyBg.style.opacity='1';
+    },200);
+    // Update trajectory: doors open at this floor
+    this._updateTraj(floor, true, false, null);
+  },
+
+  setMoving(moving, direction) {
+    if(moving){
+      this.scene.classList.remove('doors-open');
+      this.scene.classList.remove('moving-up','moving-down','moving');
+      void this.scene.offsetWidth;
+      this.scene.classList.add('moving','shaking');
+      this.scene.classList.add(direction==='up'?'moving-up':'moving-down');
+      this.dirUp.classList.toggle('visible',direction==='up');
+      this.dirDown.classList.toggle('visible',direction==='down');
+      // trajectory motion
+      this.trajMotion.classList.add('visible');
+      this.shaftEl.classList.remove('moving-up','moving-down');
+      this.shaftEl.classList.add(direction==='up'?'moving-up':'moving-down');
+    }else{
+      this.scene.classList.remove('moving','shaking','moving-up','moving-down');
+      this.dirUp.classList.remove('visible');
+      this.dirDown.classList.remove('visible');
+      this.trajMotion.classList.remove('visible');
+      this.shaftEl.classList.remove('moving-up','moving-down');
+    }
+  },
+
+  setDoorOpen(open) {
+    if(open) this.scene.classList.add('doors-open');
+    else      this.scene.classList.remove('doors-open');
+    this.doorLight.className='door-status-light'+(open?' open-light':'');
+    this.doorStatusText.textContent=open?'PORTA ABERTA':'PORTA FECHADA';
+  },
+
+  flashArrival() {
+    this.arriveFlash.classList.remove('active');
+    void this.arriveFlash.offsetWidth;
+    this.arriveFlash.classList.add('active');
+  },
+
+  renderState(stateId) {
+    const s=AFD_STATES[stateId];
+    this.stateId.textContent=stateId;
+    const names={
+      q0:'Térreo · Portas Abertas',   q1:'Térreo · Portas Fechadas',
+      q2:'1º Andar · Portas Abertas', q3:'1º Andar · Portas Fechadas',
+      q4:'2º Andar · Portas Abertas', q5:'2º Andar · Portas Fechadas',
+      q6:'3º Andar · Portas Abertas', q7:'3º Andar · Portas Fechadas',
+      q8:'Em Movimento · Subindo',    q9:'Em Movimento · Descendo',
+    };
+    this.stateName.textContent=names[stateId];
+    if(s.accepting){this.stateBadge.textContent='Aceitante ✓';this.stateBadge.className='state-badge open';}
+    else if(s.dir){this.stateBadge.textContent=s.dir==='up'?'Subindo ▲':'Descendo ▼';this.stateBadge.className='state-badge moving';}
+    else{this.stateBadge.textContent='Portas Fechadas';this.stateBadge.className='state-badge closed';}
+    diagramHighlight(stateId);
+  },
+
+  logTransition(entry) {
+    document.querySelectorAll('.sigma-item').forEach(el=>el.classList.toggle('active',el.dataset.sym===entry.sym));
+    const prev=this.logContainer.querySelector('.latest');
+    if(prev)prev.classList.remove('latest');
+    const el=document.createElement('div');
+    el.className='log-entry latest';
+    el.textContent=`δ(${entry.from}, ${entry.sym}) = ${entry.to}`;
+    this.logContainer.prepend(el);
+    while(this.logContainer.children.length>15)this.logContainer.removeChild(this.logContainer.lastChild);
+  },
+
+  renderQueue(queue) {
+    this.queueDisplay.innerHTML=queue.length===0
+      ?'<span class="queue-empty">Nenhuma chamada</span>'
+      :queue.map(f=>`<div class="queue-item">${this.FLOOR_NAMES[f]}</div>`).join('');
+  },
+
+  highlightButton(floor,cls) {
+    const btn=document.getElementById(`btn-${floor}`);
+    if(!btn)return;
+    btn.classList.remove('queued','current');
+    if(cls)btn.classList.add(cls);
+    if(cls==='current')setTimeout(()=>btn.classList.remove('current'),3000);
+  },
+
+  fullReset() {
+    this.floorDisplay.textContent='T';
+    this.floorDisplay.style.opacity='1';
+    this.floorDisplay.style.transform='scale(1)';
+    this.scene.className='elevator-scene doors-open';
+    this.dirUp.classList.remove('visible');
+    this.dirDown.classList.remove('visible');
+    this.updateLobby(0);
+    this.renderQueue([]);
+    this.setDoorOpen(true);
+    this.renderState('q0');
+    this.logContainer.innerHTML='';
+    document.querySelectorAll('.sigma-item').forEach(el=>el.classList.remove('active'));
+    document.querySelectorAll('.floor-btn').forEach(btn=>btn.classList.remove('queued','current'));
+    diagramHighlight('q0');
+    this._updateTraj(0, true, false, null);
+  }
+};
+
+/* ════════════════ AFD DIAGRAM ════════════════ */
+const STATE_POS={
+  q0:{x:60,y:72},q1:{x:155,y:72},q2:{x:280,y:72},q3:{x:375,y:72},
+  q4:{x:500,y:72},q5:{x:595,y:72},q6:{x:720,y:72},q7:{x:815,y:72},
+  q8:{x:450,y:20},q9:{x:450,y:125},
+};
+const R=26;
+function buildDiagram(){
+  const svg=document.getElementById('afd-svg');
+  svg.innerHTML='<defs><filter id="glow"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+  const mkMk=(id,c)=>{const m=document.createElementNS('http://www.w3.org/2000/svg','marker');m.setAttribute('id',id);m.setAttribute('markerWidth','6');m.setAttribute('markerHeight','6');m.setAttribute('refX','5');m.setAttribute('refY','3');m.setAttribute('orient','auto');const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M0,0 L0,6 L6,3 z');p.setAttribute('fill',c);m.appendChild(p);svg.querySelector('defs').appendChild(m);};
+  mkMk('arr','#3a4a5a');
+  const eg=document.createElementNS('http://www.w3.org/2000/svg','g');eg.id='edge-group';svg.appendChild(eg);
+  const ng=document.createElementNS('http://www.w3.org/2000/svg','g');ng.id='node-group';svg.appendChild(ng);
+  const edges=[
+    {from:'q0',to:'q1',sym:'fechar',cx:107,cy:58},{from:'q2',to:'q3',sym:'fechar',cx:327,cy:58},
+    {from:'q4',to:'q5',sym:'fechar',cx:547,cy:58},{from:'q6',to:'q7',sym:'fechar',cx:767,cy:58},
+    {from:'q1',to:'q8',sym:'subir',  cx:230,cy:28,curve:true},{from:'q3',to:'q8',sym:'subir',  cx:380,cy:18,curve:true},
+    {from:'q5',to:'q8',sym:'subir',  cx:530,cy:18,curve:true},{from:'q3',to:'q9',sym:'descer', cx:400,cy:128,curve:true},
+    {from:'q5',to:'q9',sym:'descer', cx:530,cy:128,curve:true},{from:'q7',to:'q9',sym:'descer', cx:680,cy:128,curve:true},
+    {from:'q8',to:'q2',sym:'ch1',   cx:340,cy:26,curve:true},{from:'q8',to:'q4',sym:'ch2',   cx:470,cy:18,curve:true},
+    {from:'q8',to:'q6',sym:'ch3',   cx:600,cy:26,curve:true},{from:'q9',to:'q0',sym:'chT',   cx:230,cy:130,curve:true},
+    {from:'q9',to:'q2',sym:'ch1b',  cx:360,cy:128,curve:true},{from:'q9',to:'q4',sym:'ch2b',  cx:470,cy:128,curve:true},
+  ];
+  const lblMap={fechar:'fechar',subir:'subir',descer:'descer',ch1:'ch_1',ch2:'ch_2',ch3:'ch_3',chT:'ch_T',ch1b:'ch_1',ch2b:'ch_2'};
+  edges.forEach(e=>{
+    const fp=STATE_POS[e.from],tp=STATE_POS[e.to];
+    const dx=tp.x-fp.x,dy=tp.y-fp.y,len=Math.sqrt(dx*dx+dy*dy);
+    const sx=fp.x+dx/len*(R+2),sy=fp.y+dy/len*(R+2);
+    const ex=fp.x+dx/len*(len-R-4),ey=fp.y+dy/len*(len-R-4);
+    const ln=document.createElementNS('http://www.w3.org/2000/svg','path');
+    ln.setAttribute('stroke','#2a3a4a');ln.setAttribute('stroke-width','1.2');ln.setAttribute('fill','none');ln.setAttribute('marker-end','url(#arr)');
+    ln.setAttribute('d',e.curve&&e.cx?`M${sx},${sy} Q${e.cx},${e.cy} ${ex},${ey}`:`M${sx},${sy} L${ex},${ey}`);
+    eg.appendChild(ln);
+    const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+    tx.setAttribute('x',e.cx||(fp.x+tp.x)/2);tx.setAttribute('y',e.cy||(fp.y+tp.y)/2-4);
+    tx.setAttribute('text-anchor','middle');tx.setAttribute('font-size','7');tx.setAttribute('font-family','Share Tech Mono,monospace');tx.setAttribute('fill','#3a5060');
+    tx.textContent=lblMap[e.sym]||e.sym;eg.appendChild(tx);
+  });
+  Object.entries(STATE_POS).forEach(([id,pos])=>{
+    const s=AFD_STATES[id];const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.id=`node-${id}`;
+    if(s.accepting){const oc=document.createElementNS('http://www.w3.org/2000/svg','circle');oc.setAttribute('cx',pos.x);oc.setAttribute('cy',pos.y);oc.setAttribute('r',R+4);oc.setAttribute('fill','none');oc.setAttribute('stroke','#2a3a4a');oc.setAttribute('stroke-width','1');g.appendChild(oc);}
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',pos.x);c.setAttribute('cy',pos.y);c.setAttribute('r',R);c.setAttribute('fill','#1a2030');c.setAttribute('stroke','#2e3548');c.setAttribute('stroke-width','1.5');g.appendChild(c);
+    const t1=document.createElementNS('http://www.w3.org/2000/svg','text');t1.setAttribute('x',pos.x);t1.setAttribute('y',pos.y-3);t1.setAttribute('text-anchor','middle');t1.setAttribute('dominant-baseline','middle');t1.setAttribute('font-size','9');t1.setAttribute('font-weight','700');t1.setAttribute('font-family','Orbitron,sans-serif');t1.setAttribute('fill','#5a7090');t1.textContent=id;g.appendChild(t1);
+    const parts=s.label.split(' / ');const t2=document.createElementNS('http://www.w3.org/2000/svg','text');t2.setAttribute('x',pos.x);t2.setAttribute('y',pos.y+12);t2.setAttribute('text-anchor','middle');t2.setAttribute('font-size','7');t2.setAttribute('font-family','Rajdhani,sans-serif');t2.setAttribute('fill','#3a4a5a');t2.textContent=parts[parts.length-1]||s.label;g.appendChild(t2);
+    ng.appendChild(g);
+  });
+  const ia=document.createElementNS('http://www.w3.org/2000/svg','line');ia.setAttribute('x1',STATE_POS.q0.x-R-18);ia.setAttribute('y1',STATE_POS.q0.y);ia.setAttribute('x2',STATE_POS.q0.x-R-2);ia.setAttribute('y2',STATE_POS.q0.y);ia.setAttribute('stroke','#3a4a5a');ia.setAttribute('stroke-width','1.5');ia.setAttribute('marker-end','url(#arr)');svg.appendChild(ia);
+  diagramHighlight('q0');
+}
+function diagramHighlight(id){
+  document.querySelectorAll('[id^="node-"]').forEach(g=>{
+    const c=g.querySelector('circle');if(!c)return;
+    c.setAttribute('fill','#1a2030');c.setAttribute('stroke','#2e3548');c.removeAttribute('filter');
+    const t=g.querySelectorAll('text')[0];if(t)t.setAttribute('fill','#5a7090');
+  });
+  const an=document.getElementById(`node-${id}`);
+  if(an){const c=an.querySelector('circle');if(c){c.setAttribute('fill','#0a2030');c.setAttribute('stroke','#00e5ff');c.setAttribute('stroke-width','2');c.setAttribute('filter','url(#glow)');}const t=an.querySelectorAll('text')[0];if(t)t.setAttribute('fill','#00e5ff');}
+}
+
+/* ═══════ INIT ═══════ */
+const elevator=new ElevatorController();
+function callFloor(f){elevator.callFloor(f);}
+function resetElevator(){elevator.reset();}
+
+buildDiagram();
+ui._initShaftMarkers();
+ui.updateLobby(0);
+ui.renderState('q0');
+ui.setDoorOpen(true);
+ui._updateTraj(0, true, false, null);
+</script>
+</body>
+</html>

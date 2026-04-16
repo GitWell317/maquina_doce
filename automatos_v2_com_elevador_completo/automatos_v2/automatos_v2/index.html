@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎓 AFD – Menu Principal</title>
+  <style>
+    /* ════════════════════════════════════════
+       MENU PRINCIPAL – Autômatos Finitos
+    ════════════════════════════════════════ */
+    :root {
+      --bg:        #07101f;
+      --card:      #0d1b30;
+      --neon-cyan: #00f5ff;
+      --neon-pink: #ff2d78;
+      --neon-grn:  #39ff14;
+      --neon-yel:  #ffe600;
+      --text:      #c8e6ff;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background: radial-gradient(ellipse at 50% 0%, #0f2040 0%, #07101f 65%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: var(--text);
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    /* — stars — */
+    #stars { position:fixed; inset:0; pointer-events:none; z-index:0; }
+    .star {
+      position:absolute; border-radius:50%;
+      background: white;
+      animation: twinkle var(--dur) ease-in-out infinite var(--delay);
+    }
+    @keyframes twinkle {
+      0%,100%{ opacity:0; transform:scale(0.4); }
+      50%    { opacity:var(--br); transform:scale(1); }
+    }
+
+    /* — scanline — */
+    .scanline {
+      position:fixed; inset:0; pointer-events:none; z-index:5;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px,
+        rgba(0,0,0,.10) 2px, rgba(0,0,0,.10) 4px);
+    }
+
+    /* — header — */
+    .header { text-align:center; margin-bottom:48px; position:relative; z-index:2; }
+
+    .badge {
+      display: inline-block;
+      background: rgba(0,245,255,.08);
+      border: 1px solid rgba(0,245,255,.3);
+      border-radius: 20px;
+      padding: 5px 16px;
+      font-size: 12px;
+      color: var(--neon-cyan);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #fff;
+      text-shadow: 0 0 12px rgba(0,245,255,.6), 0 0 40px rgba(0,245,255,.25);
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: clamp(13px, 2vw, 17px);
+      color: rgba(200,230,255,.55);
+      letter-spacing: 2px;
+    }
+
+    /* — cards grid — */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      position: relative;
+      z-index: 2;
+      width: min(780px, 100%);
+    }
+
+    @media (max-width: 580px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card);
+      border: 2px solid rgba(255,255,255,.08);
+      border-radius: 20px;
+      padding: 32px 28px;
+      text-decoration: none;
+      color: inherit;
+      position: relative;
+      overflow: hidden;
+      transition: transform .25s, border-color .25s, box-shadow .25s;
+      cursor: pointer;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute; inset:0;
+      background: radial-gradient(circle at 60% 30%, rgba(255,255,255,.04) 0%, transparent 65%);
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+
+    .card.case1:hover { border-color: var(--neon-pink); box-shadow: 0 0 30px rgba(255,45,120,.25), 0 20px 60px rgba(0,0,0,.5); }
+    .card.case2:hover { border-color: var(--neon-cyan); box-shadow: 0 0 30px rgba(0,245,255,.25), 0 20px 60px rgba(0,0,0,.5); }
+
+    .card-number {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+      opacity: .5;
+    }
+
+    .card-icon {
+      font-size: 52px;
+      margin-bottom: 16px;
+      display: block;
+      filter: drop-shadow(0 0 10px rgba(255,255,255,.3));
+    }
+
+    .card-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .case1 .card-title { color: var(--neon-pink); text-shadow: 0 0 10px rgba(255,45,120,.4); }
+    .case2 .card-title { color: var(--neon-cyan); text-shadow: 0 0 10px rgba(0,245,255,.4); }
+
+    .card-desc {
+      font-size: 14px;
+      color: rgba(200,230,255,.6);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 24px;
+    }
+
+    .tag {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.15);
+      color: rgba(255,255,255,.55);
+    }
+
+    .card-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      transition: opacity .2s, transform .1s;
+    }
+
+    .card-btn:hover { opacity: .85; }
+    .card-btn:active { transform: scale(.97); }
+
+    .case1 .card-btn { background: linear-gradient(135deg, #ff2d78, #c4005a); color: #fff; }
+    .case2 .card-btn { background: linear-gradient(135deg, #00c8e0, #0086a8); color: #fff; }
+
+    /* — footer — */
+    footer {
+      margin-top: 48px;
+      font-size: 12px;
+      color: rgba(255,255,255,.2);
+      letter-spacing: 1px;
+      position: relative;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+  <div id="stars"></div>
+  <div class="scanline"></div>
+
+  <header class="header">
+    <div class="badge">Teoria da Computação</div>
+    <h1>⚙️ AUTÔMATOS FINITOS</h1>
+    <p class="subtitle">AFD – Autômato Finito Determinístico</p>
+  </header>
+
+  <main class="grid">
+
+    <!-- Case 1 -->
+    <a class="card case1" href="maquina_doce/index.html">
+      <div class="card-number">Case 01</div>
+      <span class="card-icon">🍬</span>
+      <div class="card-title">Máquina de Doces</div>
+      <p class="card-desc">
+        Simule uma máquina de venda automática com inserção de moedas
+        e seleção de produtos. Veja as transições de estado em tempo real.
+      </p>
+      <div class="card-tags">
+        <span class="tag">AFD</span>
+        <span class="tag">Moedas</span>
+        <span class="tag">Doce A · B · C</span>
+        <span class="tag">Animação</span>
+      </div>
+      <span class="card-btn">▶  ABRIR CASE 1</span>
+    </a>
+
+    <!-- Case 2 -->
+    <a class="card case2" href="elevador/index.html">
+      <div class="card-number">Case 02</div>
+      <span class="card-icon">🏢</span>
+      <div class="card-title">Controle do Elevador</div>
+      <p class="card-desc">
+        Controle um elevador de 4 andares (Térreo + 3 andares).
+        O autômato gerencia portas, movimentos e fila de chamadas.
+      </p>
+      <div class="card-tags">
+        <span class="tag">AFD</span>
+        <span class="tag">4 Andares</span>
+        <span class="tag">Fila de Chamadas</span>
+        <span class="tag">Animação</span>
+      </div>
+      <span class="card-btn">▶  ABRIR CASE 2</span>
+    </a>
+
+  </main>
+
+  <footer>Autômatos Finitos Determinísticos · Teoria da Computação</footer>
+
+  <script>
+    // Generate background stars
+    const starsEl = document.getElementById('stars');
+    for (let i = 0; i < 80; i++) {
+      const s = document.createElement('div');
+      const size = Math.random() * 2.5 + 1;
+      s.className = 'star';
+      s.style.cssText = `
+        width:${size}px; height:${size}px;
+        left:${Math.random()*100}%;
+        top:${Math.random()*100}%;
+        --dur:${2+Math.random()*5}s;
+        --delay:${Math.random()*5}s;
+        --br:${0.2+Math.random()*0.8};
+      `;
+      starsEl.appendChild(s);
+    }
+  </script>
+</body>
+</html>
