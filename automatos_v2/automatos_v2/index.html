@@ -86,15 +86,18 @@
     /* — cards grid — */
     .grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 28px;
       position: relative;
       z-index: 2;
-      width: min(780px, 100%);
+      width: min(1100px, 100%);
     }
 
-    @media (max-width: 580px) {
+    @media (max-width: 760px) {
       .grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 1000px) and (min-width: 761px) {
+      .grid { grid-template-columns: 1fr 1fr; }
     }
 
     .card {
@@ -123,6 +126,7 @@
 
     .card.case1:hover { border-color: var(--neon-pink); box-shadow: 0 0 30px rgba(255,45,120,.25), 0 20px 60px rgba(0,0,0,.5); }
     .card.case2:hover { border-color: var(--neon-cyan); box-shadow: 0 0 30px rgba(0,245,255,.25), 0 20px 60px rgba(0,0,0,.5); }
+    .card.case3:hover { border-color: var(--neon-grn);  box-shadow: 0 0 30px rgba(57,255,20,.25),  0 20px 60px rgba(0,0,0,.5); }
 
     .card-number {
       font-size: 11px;
@@ -149,6 +153,7 @@
 
     .case1 .card-title { color: var(--neon-pink); text-shadow: 0 0 10px rgba(255,45,120,.4); }
     .case2 .card-title { color: var(--neon-cyan); text-shadow: 0 0 10px rgba(0,245,255,.4); }
+    .case3 .card-title { color: var(--neon-grn);  text-shadow: 0 0 10px rgba(57,255,20,.4);  }
 
     .card-desc {
       font-size: 14px;
@@ -192,6 +197,7 @@
 
     .case1 .card-btn { background: linear-gradient(135deg, #ff2d78, #c4005a); color: #fff; }
     .case2 .card-btn { background: linear-gradient(135deg, #00c8e0, #0086a8); color: #fff; }
+    .case3 .card-btn { background: linear-gradient(135deg, #39ff14, #1a9900); color: #07101f; }
 
     /* — footer — */
     footer {
@@ -250,6 +256,24 @@
         <span class="tag">Animação</span>
       </div>
       <span class="card-btn">▶  ABRIR CASE 2</span>
+    </a>
+
+    <!-- Case 3 -->
+    <a class="card case3" href="analisador_lexico/index.html">
+      <div class="card-number">Case 03</div>
+      <span class="card-icon">🔍</span>
+      <div class="card-title">Analisador Léxico</div>
+      <p class="card-desc">
+        Digite ou escolha um código-fonte e veja o lexer tokenizando
+        em tempo real: tokens animados, tabela de símbolos e log do processo.
+      </p>
+      <div class="card-tags">
+        <span class="tag">Lexer</span>
+        <span class="tag">Tokens</span>
+        <span class="tag">Tabela de Símbolos</span>
+        <span class="tag">Animação</span>
+      </div>
+      <span class="card-btn">▶  ABRIR CASE 3</span>
     </a>
 
   </main>

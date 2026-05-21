@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Case 03 – Analisador Léxico</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#07101f; --panel:#0d1b30; --steel:#111d2e; --border:#1e3050;
+      --cyan:#00f5ff; --pink:#ff2d78; --green:#39ff14; --gold:#ffe600;
+      --purple:#9b59ff; --orange:#ff9944; --text:#c8e6ff; --dim:#4a6880;
+      --neon-glow:0 0 8px var(--cyan),0 0 20px rgba(0,245,255,0.3);
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;overflow:hidden;}
+    body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--text);display:flex;flex-direction:column;height:100vh;}
+
+    /* HEADER */
+    .header{display:flex;align-items:center;justify-content:space-between;padding:9px 18px;background:var(--panel);border-bottom:2px solid var(--cyan);flex-shrink:0;}
+    .back-btn{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:1px;text-decoration:none;text-transform:uppercase;padding:5px 10px;border:1px solid var(--cyan);border-radius:4px;background:rgba(0,245,255,0.05);transition:all .2s;}
+    .back-btn:hover{background:rgba(0,245,255,0.15);}
+    .header-title{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700;letter-spacing:3px;text-transform:uppercase;}
+    .header-title span{color:var(--cyan);}
+    .header-badge{font-size:10px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;text-align:right;}
+
+    /* LAYOUT */
+    .app{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;flex:1;min-height:0;gap:1px;background:var(--border);}
+    .pane{background:var(--bg);display:flex;flex-direction:column;overflow:hidden;}
+    .pane-header{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .pane-title{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);}
+    .pane-title span{color:var(--cyan);}
+    .pane-body{flex:1;overflow:auto;padding:12px 14px;}
+
+    /* SOURCE CODE PANE */
+    .code-controls{display:flex;gap:8px;padding:8px 14px;background:var(--steel);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
+    .sample-btn{padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:11px;cursor:pointer;transition:all .2s;font-weight:600;}
+    .sample-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+    .run-btn{padding:5px 18px;border:none;border-radius:4px;background:linear-gradient(135deg,var(--cyan),#0099bb);color:#07101f;font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .2s;margin-left:auto;}
+    .run-btn:hover{box-shadow:var(--neon-glow);transform:scale(1.04);}
+    .run-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+    .clear-btn{padding:5px 10px;border:1px solid var(--pink);border-radius:4px;background:rgba(255,45,120,.07);color:var(--pink);font-size:11px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600;transition:all .2s;}
+    .clear-btn:hover{background:rgba(255,45,120,.18);}
+
+    #source-input{
+      flex:1; width:100%; background:#050d18; color:var(--text);
+      font-family:'Share Tech Mono',monospace; font-size:13px;
+      border:none; outline:none; padding:12px 14px; resize:none;
+      border-bottom:1px solid var(--border); line-height:1.6;
+      tab-size:2;
+    }
+    #source-input::placeholder{color:var(--dim);}
+
+    /* ANIMATED SCAN LINE on source */
+    .scan-wrapper{position:relative;flex:1;display:flex;flex-direction:column;}
+    .scan-cursor{
+      position:absolute; left:0; right:0; height:2px;
+      background:linear-gradient(to right,transparent,var(--cyan),transparent);
+      pointer-events:none; opacity:0; z-index:10;
+      box-shadow:0 0 8px var(--cyan);
+      transition:top 0.15s linear;
+    }
+    .scan-cursor.active{opacity:1;}
+
+    /* TOKEN STREAM PANE */
+    .token-stream{display:flex;flex-wrap:wrap;gap:6px;padding:10px;}
+    .token{
+      display:inline-flex;flex-direction:column;align-items:center;
+      padding:5px 9px; border-radius:5px;
+      border:1px solid; font-family:'Share Tech Mono',monospace;
+      animation:tokenPop .25s cubic-bezier(.17,.67,.35,1.4) forwards;
+      opacity:0; cursor:default;
+    }
+    @keyframes tokenPop{from{opacity:0;transform:scale(.7) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+    .token-val{font-size:12px;font-weight:700;}
+    .token-type{font-size:8px;letter-spacing:.8px;opacity:.7;margin-top:2px;}
+
+    /* token colours */
+    .t-KEYWORD    {border-color:var(--pink);background:rgba(255,45,120,.12);color:var(--pink);}
+    .t-IDENTIFIER {border-color:var(--cyan);background:rgba(0,245,255,.09);color:var(--cyan);}
+    .t-NUMBER     {border-color:var(--gold);background:rgba(255,230,0,.09);color:var(--gold);}
+    .t-OPERATOR   {border-color:var(--green);background:rgba(57,255,20,.09);color:var(--green);}
+    .t-DELIMITER  {border-color:var(--purple);background:rgba(155,89,255,.12);color:var(--purple);}
+    .t-STRING     {border-color:var(--orange);background:rgba(255,153,68,.09);color:var(--orange);}
+    .t-COMMENT    {border-color:var(--dim);background:rgba(74,104,128,.12);color:var(--dim);text-decoration:line-through;}
+    .t-FLOAT      {border-color:var(--gold);background:rgba(255,230,0,.09);color:var(--gold);}
+
+    /* SYMBOL TABLE PANE */
+    .sym-table{width:100%;border-collapse:collapse;font-size:11px;}
+    .sym-table th{
+      padding:6px 10px;text-align:left;font-family:'Orbitron',sans-serif;
+      font-size:8px;letter-spacing:1.5px;text-transform:uppercase;
+      background:var(--steel);color:var(--cyan);border-bottom:1px solid var(--border);
+      position:sticky;top:0;z-index:2;
+    }
+    .sym-table td{padding:5px 10px;border-bottom:1px solid rgba(30,48,80,.4);font-family:'Share Tech Mono',monospace;}
+    .sym-table tr:nth-child(even){background:rgba(13,27,48,.4);}
+    .sym-table tr{animation:rowIn .2s ease forwards;opacity:0;}
+    @keyframes rowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+    .col-name{color:var(--cyan);}
+    .col-type{font-size:10px;}
+    .col-line{color:var(--dim);}
+
+    /* TOKEN TYPE BADGES in sym table */
+    .badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;}
+    .b-KEYWORD   {background:rgba(255,45,120,.18);color:var(--pink);}
+    .b-IDENTIFIER{background:rgba(0,245,255,.12);color:var(--cyan);}
+    .b-NUMBER    {background:rgba(255,230,0,.12);color:var(--gold);}
+    .b-FLOAT     {background:rgba(255,230,0,.12);color:var(--gold);}
+    .b-OPERATOR  {background:rgba(57,255,20,.12);color:var(--green);}
+    .b-DELIMITER {background:rgba(155,89,255,.16);color:var(--purple);}
+    .b-STRING    {background:rgba(255,153,68,.12);color:var(--orange);}
+
+    /* LOG / PROCESS PANE */
+    .log-pane{font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.7;padding:10px 14px;}
+    .log-line{display:block;animation:fadeIn .2s ease;opacity:0;animation-fill-mode:forwards;}
+    @keyframes fadeIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
+    .log-ok   {color:var(--green);}
+    .log-info {color:var(--cyan);}
+    .log-warn {color:var(--gold);}
+    .log-dim  {color:var(--dim);}
+    .log-tok  {color:var(--text);}
+    .log-err  {color:var(--pink);}
+
+    /* STATS BAR */
+    .stats-bar{display:flex;gap:14px;padding:6px 14px;background:var(--steel);border-top:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+    .stat{display:flex;align-items:center;gap:5px;font-size:11px;}
+    .stat-val{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;}
+
+    /* LEGEND */
+    .legend{display:flex;flex-wrap:wrap;gap:6px;padding:6px 14px;background:var(--steel);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .leg-item{display:flex;align-items:center;gap:4px;font-size:10px;}
+    .leg-dot{width:8px;height:8px;border-radius:2px;}
+
+    /* speed control */
+    .speed-label{font-size:10px;color:var(--dim);margin-left:auto;}
+    input[type=range]{accent-color:var(--cyan);width:70px;}
+
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  </style>
+</head>
+<body>
+<header class="header">
+  <a class="back-btn" href="../index.html">← Menu</a>
+  <div class="header-title"><span>CASE 03</span> — ANALISADOR LÉXICO</div>
+  <div class="header-badge">Teoria da Computação · Lexer</div>
+</header>
+
+<div class="app">
+
+  <!-- ① SOURCE CODE -->
+  <div class="pane" style="grid-row:1/3;">
+    <div class="pane-header">
+      <div class="pane-title"><span>①</span> Código-Fonte</div>
+    </div>
+    <div class="code-controls">
+      <button class="sample-btn" onclick="loadSample(0)">Aritmética</button>
+      <button class="sample-btn" onclick="loadSample(1)">Controle</button>
+      <button class="sample-btn" onclick="loadSample(2)">Função</button>
+      <button class="sample-btn" onclick="loadSample(3)">Completo</button>
+      <button class="clear-btn" onclick="clearAll()">✕ Limpar</button>
+      <span class="speed-label">Velocidade:</span>
+      <input type="range" id="speed-range" min="1" max="5" value="3" title="Velocidade da animação">
+      <button class="run-btn" id="run-btn" onclick="runLexer()">▶ ANALISAR</button>
+    </div>
+    <div class="scan-wrapper">
+      <div class="scan-cursor" id="scan-cursor"></div>
+      <textarea id="source-input" spellcheck="false"
+        placeholder="// Digite ou selecione um exemplo acima...
+int soma = a + b * 2;"></textarea>
+    </div>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--pink)"></div>Keyword</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--cyan)"></div>Identificador</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--gold)"></div>Número</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Operador</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--purple)"></div>Delimitador</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--orange)"></div>String</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--dim)"></div>Comentário (ignorado)</div>
+    </div>
+  </div>
+
+  <!-- ② TOKEN STREAM -->
+  <div class="pane">
+    <div class="pane-header">
+      <div class="pane-title"><span>②</span> Fluxo de Tokens</div>
+    </div>
+    <div class="pane-body" id="token-pane">
+      <div class="token-stream" id="token-stream">
+        <span style="color:var(--dim);font-size:12px;font-style:italic;">Tokens aparecerão aqui após a análise...</span>
+      </div>
+    </div>
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat"><span style="color:var(--dim)">Tokens:</span><span class="stat-val" id="stat-tokens" style="color:var(--cyan)">0</span></div>
+      <div class="stat"><span style="color:var(--dim)">Identificadores:</span><span class="stat-val" id="stat-ids" style="color:var(--cyan)">0</span></div>
+      <div class="stat"><span style="color:var(--dim)">Keywords:</span><span class="stat-val" id="stat-kw" style="color:var(--pink)">0</span></div>
+      <div class="stat"><span style="color:var(--dim)">Comentários removidos:</span><span class="stat-val" id="stat-cmts" style="color:var(--dim)">0</span></div>
+    </div>
+  </div>
+
+  <!-- ③ SYMBOL TABLE -->
+  <div class="pane">
+    <div class="pane-header">
+      <div class="pane-title"><span>③</span> Tabela de Símbolos</div>
+    </div>
+    <div class="pane-body" style="padding:0;">
+      <table class="sym-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Lexema</th>
+            <th>Tipo</th>
+            <th>Linha</th>
+            <th>Ocorrências</th>
+          </tr>
+        </thead>
+        <tbody id="sym-body">
+          <tr><td colspan="5" style="color:var(--dim);padding:12px;font-family:'Rajdhani',sans-serif;">Aguardando análise...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ④ PROCESS LOG -->
+  <div class="pane" style="display:none;" id="log-pane-wrap">
+    <div class="pane-header">
+      <div class="pane-title"><span>④</span> Log do Processo</div>
+    </div>
+    <div class="pane-body" id="log-body">
+      <div class="log-pane" id="log-pane"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════
+   LEXER ENGINE
+══════════════════════════════════════════════ */
+const KEYWORDS = new Set([
+  'int','float','double','char','bool','string','void','long','short','unsigned',
+  'if','else','while','for','do','switch','case','break','continue','return',
+  'function','def','class','struct','new','delete','null','true','false','let','var','const',
+  'import','export','from','as','try','catch','finally','throw','in','of','typeof','instanceof'
+]);
+
+const SAMPLES = [
+  // 0 – Arithmetic
+`// Exemplo 1: Operações Aritméticas
+int a = 10;
+int b = 3;
+float resultado = (a + b) * 2.5;
+int resto = a % b;
+bool flag = (resultado > 10);`,
+
+  // 1 – Control flow
+`// Exemplo 2: Estruturas de Controle
+int contador = 0;
+for (int i = 0; i < 10; i++) {
+    if (i % 2 == 0) {
+        contador = contador + 1;
+    }
+}
+// resultado final
+return contador;`,
+
+  // 2 – Function
+`// Exemplo 3: Função com Parâmetros
+function calcularMedia(int a, int b, int c) {
+    float soma = a + b + c;
+    float media = soma / 3.0;
+    return media;
+}
+/* chamada da função */
+float resultado = calcularMedia(10, 20, 30);`,
+
+  // 3 – Full program
+`// Exemplo 4: Programa Completo
+class Aluno {
+    string nome;
+    int matricula;
+    float nota;
+
+    function aprovado() {
+        /* verifica aprovação */
+        if (nota >= 6.0) {
+            return true;
+        }
+        return false;
+    }
+}
+
+// Instância
+Aluno a1 = new Aluno();
+a1.nome = "Maria";
+a1.nota = 8.5;
+bool ok = a1.aprovado();`
+];
+
+function tokenize(source) {
+  const tokens = [];
+  let i = 0, line = 1;
+
+  while (i < source.length) {
+    const ch = source[i];
+
+    // Skip whitespace
+    if (/[\s]/.test(ch)) {
+      if (ch === '\n') line++;
+      i++;
+      continue;
+    }
+
+    // Line comment
+    if (source[i]==='/' && source[i+1]==='/') {
+      let val = '';
+      while (i < source.length && source[i] !== '\n') { val += source[i]; i++; }
+      tokens.push({ type:'COMMENT', value:val.trim(), line, ignored:true });
+      continue;
+    }
+
+    // Block comment
+    if (source[i]==='/' && source[i+1]==='*') {
+      let val = '/*'; i+=2;
+      while (i < source.length && !(source[i]==='*' && source[i+1]==='/')) {
+        if (source[i]==='\n') line++;
+        val += source[i]; i++;
+      }
+      val += '*/'; i+=2;
+      tokens.push({ type:'COMMENT', value:val.trim(), line, ignored:true });
+      continue;
+    }
+
+    // String literal
+    if (ch === '"' || ch === "'") {
+      const quote = ch; let val = quote; i++;
+      while (i < source.length && source[i] !== quote) {
+        val += source[i]; i++;
+      }
+      val += quote; i++;
+      tokens.push({ type:'STRING', value:val, line });
+      continue;
+    }
+
+    // Float / Number
+    if (/[0-9]/.test(ch) || (ch==='-' && /[0-9]/.test(source[i+1]) && (tokens.length===0 || ['OPERATOR','DELIMITER'].includes(tokens[tokens.length-1]?.type)))) {
+      let val = ''; let isFloat = false;
+      if (ch==='-') { val='-'; i++; }
+      while (i < source.length && /[0-9]/.test(source[i])) { val += source[i]; i++; }
+      if (source[i]==='.' && /[0-9]/.test(source[i+1])) {
+        isFloat = true; val += '.'; i++;
+        while (i < source.length && /[0-9]/.test(source[i])) { val += source[i]; i++; }
+      }
+      tokens.push({ type: isFloat ? 'FLOAT' : 'NUMBER', value:val, line });
+      continue;
+    }
+
+    // Identifier or Keyword
+    if (/[a-zA-Z_$]/.test(ch)) {
+      let val = '';
+      while (i < source.length && /[a-zA-Z0-9_$]/.test(source[i])) { val += source[i]; i++; }
+      tokens.push({ type: KEYWORDS.has(val) ? 'KEYWORD' : 'IDENTIFIER', value:val, line });
+      continue;
+    }
+
+    // Multi-char operators
+    const two = source.slice(i, i+2);
+    if (['==','!=','<=','>=','&&','||','++','--','+=','-=','*=','/=','->','::'].includes(two)) {
+      tokens.push({ type:'OPERATOR', value:two, line }); i+=2; continue;
+    }
+
+    // Single-char operators
+    if ('+-*/%=<>!&|^~'.includes(ch)) {
+      tokens.push({ type:'OPERATOR', value:ch, line }); i++; continue;
+    }
+
+    // Delimiters
+    if ('(){}[];,.:'.includes(ch)) {
+      tokens.push({ type:'DELIMITER', value:ch, line }); i++; continue;
+    }
+
+    // Unknown — skip
+    i++;
+  }
+  return tokens;
+}
+
+function buildSymbolTable(tokens) {
+  const table = new Map();
+  tokens.forEach(tok => {
+    if (tok.ignored) return;
+    const key = `${tok.value}__${tok.type}`;
+    if (!table.has(key)) {
+      table.set(key, { lexema:tok.value, type:tok.type, line:tok.line, count:0 });
+    }
+    table.get(key).count++;
+  });
+  return [...table.values()].sort((a,b)=>a.line-b.line);
+}
+
+/* ══════════════════════════════════════════════
+   ANIMATION ENGINE
+══════════════════════════════════════════════ */
+let animRunning = false;
+let animQueue = [];
+let animTimer = null;
+
+function getDelay() {
+  const v = document.getElementById('speed-range').value;
+  // v=1 slow (300ms), v=5 fast (40ms)
+  return Math.round(300 - (v-1)*65);
+}
+
+function loadSample(idx) {
+  document.getElementById('source-input').value = SAMPLES[idx];
+  clearResults();
+}
+
+function clearAll() {
+  document.getElementById('source-input').value = '';
+  clearResults();
+}
+
+function clearResults() {
+  cancelAnim();
+  document.getElementById('token-stream').innerHTML = '<span style="color:var(--dim);font-size:12px;font-style:italic;">Tokens aparecerão aqui após a análise...</span>';
+  document.getElementById('sym-body').innerHTML = '<tr><td colspan="5" style="color:var(--dim);padding:12px;font-family:Rajdhani,sans-serif;">Aguardando análise...</td></tr>';
+  document.getElementById('log-pane').innerHTML = '';
+  document.getElementById('stat-tokens').textContent = '0';
+  document.getElementById('stat-ids').textContent = '0';
+  document.getElementById('stat-kw').textContent = '0';
+  document.getElementById('stat-cmts').textContent = '0';
+  document.getElementById('scan-cursor').classList.remove('active');
+}
+
+function cancelAnim() {
+  animRunning = false;
+  clearTimeout(animTimer);
+  animQueue = [];
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('run-btn').textContent = '▶ ANALISAR';
+}
+
+function runLexer() {
+  if (animRunning) { cancelAnim(); return; }
+  const src = document.getElementById('source-input').value.trim();
+  if (!src) { alert('Digite ou selecione um código-fonte!'); return; }
+
+  clearResults();
+  animRunning = true;
+  document.getElementById('run-btn').textContent = '■ PARAR';
+  document.getElementById('run-btn').disabled = false;
+
+  const tokens = tokenize(src);
+  const symTable = buildSymbolTable(tokens);
+
+  // Build animation queue
+  animQueue = [];
+
+  // Phase 1: scan animation (line by line)
+  const lines = src.split('\n');
+  const lineH = 25.6; // approx px per line in textarea
+  lines.forEach((ln, i) => {
+    animQueue.push({ type:'scan', lineIdx:i, lineText:ln });
+  });
+
+  // Phase 2: emit tokens one by one
+  tokens.forEach((tok, idx) => {
+    animQueue.push({ type:'token', tok, idx });
+  });
+
+  // Phase 3: symbol table rows
+  symTable.forEach((row, idx) => {
+    animQueue.push({ type:'sym', row, idx });
+  });
+
+  // Phase 4: stats
+  animQueue.push({ type:'stats', tokens, symTable });
+
+  // Clear token stream for animation
+  document.getElementById('token-stream').innerHTML = '';
+
+  processQueue();
+}
+
+function processQueue() {
+  if (!animRunning || animQueue.length === 0) {
+    document.getElementById('scan-cursor').classList.remove('active');
+    if (animRunning) {
+      animRunning = false;
+      document.getElementById('run-btn').textContent = '▶ ANALISAR';
+    }
+    return;
+  }
+
+  const item = animQueue.shift();
+  const delay = getDelay();
+
+  if (item.type === 'scan') {
+    const cursor = document.getElementById('scan-cursor');
+    cursor.classList.add('active');
+    cursor.style.top = (item.lineIdx * 24 + 2) + 'px';
+    addLog(item.lineText, item.lineIdx+1, delay);
+    animTimer = setTimeout(processQueue, delay * 0.4);
+
+  } else if (item.type === 'token') {
+    renderToken(item.tok, item.idx, delay);
+    animTimer = setTimeout(processQueue, delay);
+
+  } else if (item.type === 'sym') {
+    renderSymRow(item.row, item.idx, delay);
+    animTimer = setTimeout(processQueue, delay * 0.5);
+
+  } else if (item.type === 'stats') {
+    updateStats(item.tokens, item.symTable);
+    animTimer = setTimeout(processQueue, delay);
+  }
+}
+
+function renderToken(tok, idx, delay) {
+  const stream = document.getElementById('token-stream');
+  if (idx === 0) stream.innerHTML = '';
+
+  const el = document.createElement('div');
+  el.className = `token t-${tok.type}`;
+  el.style.animationDelay = '0ms';
+  if (tok.ignored) {
+    el.style.opacity = '0.4';
+    el.title = 'Ignorado pelo lexer';
+  }
+  el.innerHTML = `<span class="token-val">${escHtml(tok.value)}</span><span class="token-type">${tok.type}</span>`;
+  el.title = `Linha ${tok.line}  ·  ${tok.type}${tok.ignored?' (ignorado)':''}`;
+  stream.appendChild(el);
+  stream.scrollTop = stream.scrollHeight;
+
+  // Log line
+  const logLine = tok.ignored
+    ? `<span class="log-dim">  [L${tok.line}] IGNORADO  → ${escHtml(tok.value)}</span>`
+    : `<span class="log-tok">  [L${tok.line}] &lt;<span style="color:${typeColor(tok.type)}">${tok.type}</span>, "<b>${escHtml(tok.value)}</b>"&gt;</span>`;
+  appendLog(logLine);
+}
+
+function renderSymRow(row, idx, delay) {
+  const tbody = document.getElementById('sym-body');
+  if (idx === 0) tbody.innerHTML = '';
+  const tr = document.createElement('tr');
+  tr.style.animationDelay = (idx*30)+'ms';
+  tr.innerHTML = `
+    <td class="col-line">${idx+1}</td>
+    <td class="col-name">${escHtml(row.lexema)}</td>
+    <td><span class="badge b-${row.type}">${row.type}</span></td>
+    <td class="col-line">${row.line}</td>
+    <td style="color:var(--gold)">${row.count}</td>
+  `;
+  tbody.appendChild(tr);
+  document.getElementById('sym-body').parentElement.scrollTop = 9999;
+}
+
+function addLog(lineText, lineNum, delay) {
+  if (!lineText.trim()) return;
+  const isComment = lineText.trim().startsWith('//') || lineText.trim().startsWith('/*');
+  const cls = isComment ? 'log-warn' : 'log-info';
+  const label = isComment ? '⤷ COMENTÁRIO (remover)' : `→ escaneando`;
+  appendLog(`<span class="${cls}">[L${lineNum}] ${label}:  <span style="color:var(--dim)">${escHtml(lineText.trim().slice(0,60))}</span></span>`);
+}
+
+function appendLog(html) {
+  const pane = document.getElementById('log-pane');
+  const span = document.createElement('div');
+  span.className = 'log-line';
+  span.innerHTML = html;
+  span.style.animationDelay = '0ms';
+  pane.appendChild(span);
+  pane.parentElement.scrollTop = pane.parentElement.scrollHeight;
+}
+
+function updateStats(tokens, symTable) {
+  const visible = tokens.filter(t=>!t.ignored);
+  document.getElementById('stat-tokens').textContent = visible.length;
+  document.getElementById('stat-ids').textContent = visible.filter(t=>t.type==='IDENTIFIER').length;
+  document.getElementById('stat-kw').textContent = visible.filter(t=>t.type==='KEYWORD').length;
+  document.getElementById('stat-cmts').textContent = tokens.filter(t=>t.ignored).length;
+}
+
+function typeColor(type) {
+  const map = { KEYWORD:'var(--pink)', IDENTIFIER:'var(--cyan)', NUMBER:'var(--gold)',
+    FLOAT:'var(--gold)', OPERATOR:'var(--green)', DELIMITER:'var(--purple)',
+    STRING:'var(--orange)', COMMENT:'var(--dim)' };
+  return map[type] || 'var(--text)';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Load default sample
+loadSample(0);
+</script>
+</body>
+</html>
